@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nova_accessibility_service_description">NOVA uses accessibility for UI automation fallback when official APIs are unavailable.</string>
+</resources>

@@ -1,11 +1,13 @@
 package com.nova.runtime.models.contracts
 
 import com.nova.runtime.models.Nag
+import com.nova.runtime.models.Nir
 import com.nova.runtime.models.ReasoningContext
 import com.nova.runtime.models.RuntimeError
 import java.util.UUID
 
 data class PlanningRequest(
+    val nir: Nir,
     val reasoningContext: ReasoningContext,
     val traceId: UUID,
 )

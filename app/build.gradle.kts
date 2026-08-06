@@ -54,6 +54,7 @@ dependencies {
     implementation(project(":runtime:policy"))
     implementation(project(":runtime:capability"))
     implementation(project(":runtime:android-adapter"))
+    implementation(project(":runtime:ai-native"))
     implementation(project(":runtime:storage"))
     implementation(project(":runtime:events"))
     implementation(project(":runtime:models"))

@@ -1,6 +1,8 @@
 package com.nova.runtime.app
 
 import android.app.Application
+import com.nova.runtime.app.di.aiIntegrationModule
+import com.nova.runtime.app.di.executionPersistenceModule
 import com.nova.runtime.app.di.runtimeModule
 import com.nova.runtime.kernel.RuntimeKernel
 import com.nova.runtime.storage.di.storageModule
@@ -16,7 +18,12 @@ class NovaApplication : Application() {
         super.onCreate()
         startKoin {
             androidContext(this@NovaApplication)
-            modules(runtimeModule, storageModule(this@NovaApplication))
+            modules(
+                runtimeModule,
+                storageModule(this@NovaApplication),
+                executionPersistenceModule,
+                aiIntegrationModule,
+            )
         }
         runBlocking {
             runtimeKernel.bootstrap()
