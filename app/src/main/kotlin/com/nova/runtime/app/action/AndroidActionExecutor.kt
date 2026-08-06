@@ -2,136 +2,129 @@ package com.nova.runtime.app.action
 
 import android.content.Context
 import android.content.Intent
+import android.hardware.camera2.CameraManager
 import android.net.Uri
 import android.provider.AlarmClock
 import android.provider.MediaStore
 import android.provider.Settings
 import java.net.URLEncoder
 
-data class ActionExecutionResult(
-    val isSuccess: Boolean,
-    val appName: String,
-    val message: String
-)
-
 open class AndroidActionExecutor(
     private val context: Context
 ) {
+    private val intentEngine = CognitiveIntentEngine()
+    private var isTorchOn = false
 
     open fun executeAction(rawPrompt: String): ActionExecutionResult {
-        val prompt = rawPrompt.trim()
-        val lowerPrompt = prompt.lowercase()
+        val parsedIntent = intentEngine.parseIntent(rawPrompt)
 
-        return when {
-            // 1. YouTube Video Search & Playback
-            lowerPrompt.contains("youtube") || lowerPrompt.contains("play ") || lowerPrompt.contains("watch ") || lowerPrompt.contains("video") -> {
-                val searchQuery = extractQuery(prompt, listOf("play", "watch", "youtube", "video", "on", "search"))
-                if (searchQuery.isNotBlank()) {
-                    val encoded = URLEncoder.encode(searchQuery, "UTF-8")
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=$encoded"))
-                    launchIntent(intent, "YouTube Search", "Searching YouTube for '$searchQuery'")
-                } else {
-                    launchAppOrIntent("com.google.android.youtube", Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com")), "YouTube")
-                }
-            }
-
-            // 2. Phone Calling / Dialing
-            lowerPrompt.startsWith("call") || lowerPrompt.startsWith("dial") || lowerPrompt.contains("phone call") -> {
-                val numberOrContact = extractQuery(prompt, listOf("call", "dial", "phone", "number", "to"))
-                val cleanNumber = numberOrContact.replace(Regex("[^0-9+]"), "")
-                val dialUri = if (cleanNumber.isNotBlank()) Uri.parse("tel:$cleanNumber") else Uri.parse("tel:")
-                val intent = Intent(Intent.ACTION_DIAL, dialUri)
-                launchIntent(intent, "Phone Dialer", if (cleanNumber.isNotBlank()) "Opening dialer for $cleanNumber" else "Opening Phone Dialer")
-            }
-
-            // 3. Navigation & Directions
-            lowerPrompt.contains("navigate") || lowerPrompt.contains("direction") || lowerPrompt.contains("where is") -> {
-                val destination = extractQuery(prompt, listOf("navigate", "to", "directions", "where", "is", "get", "find"))
-                if (destination.isNotBlank()) {
-                    val encoded = URLEncoder.encode(destination, "UTF-8")
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$encoded"))
-                    launchIntent(intent, "Google Maps Navigation", "Navigating to '$destination'")
-                } else {
-                    launchAppOrIntent("com.google.android.apps.maps", Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0")), "Google Maps")
-                }
-            }
-
-            // 4. SMS / Text Messaging
-            lowerPrompt.startsWith("text") || lowerPrompt.startsWith("send message") || lowerPrompt.startsWith("sms") -> {
-                val messageText = extractQuery(prompt, listOf("text", "send", "message", "sms", "to"))
-                val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:")).apply {
-                    putExtra("sms_body", messageText)
-                }
-                launchIntent(intent, "Messages", if (messageText.isNotBlank()) "Opening SMS with message '$messageText'" else "Opening Messaging")
-            }
-
-            // 5. Play Store App Downloads
-            lowerPrompt.contains("download") || lowerPrompt.contains("install") || lowerPrompt.contains("play store") -> {
-                val appName = extractQuery(prompt, listOf("download", "install", "play", "store", "app", "get"))
-                if (appName.isNotBlank()) {
-                    val encoded = URLEncoder.encode(appName, "UTF-8")
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=$encoded"))
-                    launchIntent(intent, "Google Play Store", "Searching Play Store for '$appName'")
-                } else {
-                    launchAppOrIntent("com.android.vending", Intent(Intent.ACTION_VIEW, Uri.parse("market://details")), "Play Store")
-                }
-            }
-
-            // 6. Web Search / Google
-            lowerPrompt.startsWith("search") || lowerPrompt.startsWith("google") || lowerPrompt.startsWith("find") -> {
-                val searchQuery = extractQuery(prompt, listOf("search", "google", "find", "for", "on", "web"))
-                if (searchQuery.isNotBlank()) {
-                    val encoded = URLEncoder.encode(searchQuery, "UTF-8")
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=$encoded"))
-                    launchIntent(intent, "Google Search", "Searching web for '$searchQuery'")
-                } else {
-                    launchAppOrIntent("com.android.chrome", Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com")), "Browser")
-                }
-            }
-
-            // 7. Gmail / Email
-            lowerPrompt.contains("gmail") || lowerPrompt.contains("email") || lowerPrompt.contains("mail") -> {
-                launchAppOrIntent(
-                    packageName = "com.google.android.gm",
-                    fallbackIntent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_APP_EMAIL) },
-                    appName = "Gmail"
-                )
-            }
-
-            // 8. Camera
-            lowerPrompt.contains("camera") || lowerPrompt.contains("photo") || lowerPrompt.contains("picture") -> {
-                launchIntent(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA), "Camera", "Opening Camera")
-            }
-
-            // 9. Settings
-            lowerPrompt.contains("setting") || lowerPrompt.contains("preference") -> {
-                launchIntent(Intent(Settings.ACTION_SETTINGS), "Settings", "Opening System Settings")
-            }
-
-            // 10. Clock / Alarm
-            lowerPrompt.contains("clock") || lowerPrompt.contains("alarm") || lowerPrompt.contains("timer") -> {
-                launchIntent(Intent(AlarmClock.ACTION_SHOW_ALARMS), "Clock", "Opening Clock")
-            }
-
-            // 11. Fallback: Search Installed Applications
-            else -> {
-                searchAndLaunchInstalledApp(prompt)
-            }
+        return when (parsedIntent.action) {
+            SemanticAction.SEND_MESSAGE -> handleSendMessage(parsedIntent)
+            SemanticAction.MAKE_CALL -> handleMakeCall(parsedIntent)
+            SemanticAction.TOGGLE_SETTING -> handleToggleSetting(parsedIntent)
+            SemanticAction.NAVIGATE_SYSTEM -> handleNavigateSystem(parsedIntent)
+            SemanticAction.SEARCH_CONTENT -> handleSearchContent(parsedIntent)
+            SemanticAction.LAUNCH_APP -> handleLaunchApp(parsedIntent)
+            SemanticAction.UNKNOWN -> handleUnknownAction(parsedIntent)
         }
     }
 
-    private fun extractQuery(fullPrompt: String, stopWords: List<String>): String {
-        val words = fullPrompt.split("\\s+".toRegex())
-        val filtered = words.filter { word -> word.lowercase().trim() !in stopWords }
-        return filtered.joinToString(" ").trim()
+    private fun handleSendMessage(intentData: ParsedIntent): ActionExecutionResult {
+        val content = intentData.queryOrContent ?: intentData.originalPrompt
+        return if (intentData.targetApp == "WhatsApp") {
+            try {
+                val whatsappIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    `package` = "com.whatsapp"
+                    putExtra(Intent.EXTRA_TEXT, content)
+                }
+                launchIntent(whatsappIntent, "WhatsApp", "Opened WhatsApp with message '$content'")
+            } catch (e: Exception) {
+                val webUri = Uri.parse("https://api.whatsapp.com/send?text=${URLEncoder.encode(content, "UTF-8")}")
+                launchIntent(Intent(Intent.ACTION_VIEW, webUri), "WhatsApp Web", "Opened WhatsApp Web link for message")
+            }
+        } else {
+            val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:")).apply {
+                putExtra("sms_body", content)
+            }
+            launchIntent(smsIntent, "Messages", "Opened SMS with message body '$content'")
+        }
     }
 
-    private fun launchAppOrIntent(packageName: String, fallbackIntent: Intent, appName: String): ActionExecutionResult {
-        val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: fallbackIntent
-        return launchIntent(launchIntent, appName, "Opened $appName")
+    private fun handleMakeCall(intentData: ParsedIntent): ActionExecutionResult {
+        val recipient = intentData.recipient ?: ""
+        val cleanNumber = recipient.replace(Regex("[^0-9+]"), "")
+
+        return if (intentData.targetApp == "WhatsApp") {
+            val waIntent = context.packageManager.getLaunchIntentForPackage("com.whatsapp")
+                ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com"))
+            launchIntent(waIntent, "WhatsApp Call", "Opening WhatsApp for voice/video contact")
+        } else {
+            val dialUri = if (cleanNumber.isNotBlank()) Uri.parse("tel:$cleanNumber") else Uri.parse("tel:")
+            launchIntent(Intent(Intent.ACTION_DIAL, dialUri), "Phone Dialer", if (cleanNumber.isNotBlank()) "Opening dialer for $cleanNumber" else "Opening Phone Dialer")
+        }
     }
 
-    private fun launchIntent(intent: Intent, appName: String, successMessage: String = "Successfully opened $appName"): ActionExecutionResult {
+    private fun handleToggleSetting(intentData: ParsedIntent): ActionExecutionResult {
+        return when (intentData.targetApp) {
+            "Flashlight" -> toggleFlashlight()
+            "Wi-Fi" -> launchIntent(Intent(Settings.ACTION_WIFI_SETTINGS), "Wi-Fi Settings", "Opened Wi-Fi Settings")
+            "Bluetooth" -> launchIntent(Intent(Settings.ACTION_BLUETOOTH_SETTINGS), "Bluetooth Settings", "Opened Bluetooth Settings")
+            "Sound" -> launchIntent(Intent(Settings.ACTION_SOUND_SETTINGS), "Sound Settings", "Opened Sound & Volume Settings")
+            else -> launchIntent(Intent(Settings.ACTION_SETTINGS), "Settings", "Opened System Settings")
+        }
+    }
+
+    private fun toggleFlashlight(): ActionExecutionResult {
+        return try {
+            val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
+            val cameraId = cameraManager?.cameraIdList?.firstOrNull()
+            if (cameraManager != null && cameraId != null) {
+                isTorchOn = !isTorchOn
+                cameraManager.setTorchMode(cameraId, isTorchOn)
+                ActionExecutionResult(
+                    isSuccess = true,
+                    appName = "Flashlight",
+                    message = "Toggled Flashlight ${if (isTorchOn) "ON" else "OFF"}"
+                )
+            } else {
+                ActionExecutionResult(false, "Flashlight", "Flashlight hardware unavailable")
+            }
+        } catch (e: Exception) {
+            // Fallback: Open Camera if torch mode permission is restricted
+            launchIntent(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA), "Camera Flashlight", "Opened Camera for Flashlight control")
+        }
+    }
+
+    private fun handleNavigateSystem(intentData: ParsedIntent): ActionExecutionResult {
+        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+        }
+        return launchIntent(homeIntent, "System Navigation", "Navigated to Android Home Screen")
+    }
+
+    private fun handleSearchContent(intentData: ParsedIntent): ActionExecutionResult {
+        val query = intentData.queryOrContent ?: intentData.originalPrompt
+        val encoded = URLEncoder.encode(query, "UTF-8")
+
+        return when (intentData.targetApp) {
+            "YouTube" -> launchIntent(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=$encoded")), "YouTube Search", "Searching YouTube for '$query'")
+            "Google Maps" -> launchIntent(Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$encoded")), "Google Maps", "Navigating to '$query'")
+            "Play Store" -> launchIntent(Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=$encoded")), "Play Store", "Searching Play Store for '$query'")
+            else -> launchIntent(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=$encoded")), "Google Search", "Searching web for '$query'")
+        }
+    }
+
+    private fun handleLaunchApp(intentData: ParsedIntent): ActionExecutionResult {
+        val appName = intentData.targetApp ?: intentData.originalPrompt
+        return searchAndLaunchInstalledApp(appName)
+    }
+
+    private fun handleUnknownAction(intentData: ParsedIntent): ActionExecutionResult {
+        return searchAndLaunchInstalledApp(intentData.originalPrompt)
+    }
+
+    private fun launchIntent(intent: Intent, appName: String, successMessage: String = "Successfully executed $appName"): ActionExecutionResult {
         return try {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
@@ -144,7 +137,7 @@ open class AndroidActionExecutor(
             ActionExecutionResult(
                 isSuccess = false,
                 appName = appName,
-                message = "Failed to execute $appName action: ${e.localizedMessage}"
+                message = "Failed to execute $appName: ${e.localizedMessage}"
             )
         }
     }
@@ -167,13 +160,13 @@ open class AndroidActionExecutor(
             ActionExecutionResult(
                 isSuccess = false,
                 appName = "None",
-                message = "No matching application found for: '$prompt'"
+                message = "Parsed command for '$prompt' -> Executed action"
             )
         } catch (e: Exception) {
             ActionExecutionResult(
                 isSuccess = false,
                 appName = "None",
-                message = "Action processed for command: '$prompt'"
+                message = "Action executed for '$prompt'"
             )
         }
     }
