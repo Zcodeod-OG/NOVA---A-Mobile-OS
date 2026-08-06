@@ -9,6 +9,12 @@ import android.provider.MediaStore
 import android.provider.Settings
 import java.net.URLEncoder
 
+data class ActionExecutionResult(
+    val isSuccess: Boolean,
+    val appName: String,
+    val message: String
+)
+
 open class AndroidActionExecutor(
     private val context: Context
 ) {
