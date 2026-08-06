@@ -2,6 +2,7 @@ package com.nova.runtime.app.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nova.runtime.app.action.AndroidActionExecutor
 import com.nova.runtime.app.ui.components.ActivityItem
 import com.nova.runtime.events.EventSubscriber
 import com.nova.runtime.events.RuntimeEvent
@@ -18,7 +19,8 @@ import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 class NovaOsViewModel(
-    private val runtimeKernel: RuntimeKernel
+    private val runtimeKernel: RuntimeKernel,
+    private val actionExecutor: AndroidActionExecutor
 ) : ViewModel(), EventSubscriber {
 
     override val subscriberId: String = "NOVA_UI_SUBSCRIBER"
@@ -113,7 +115,7 @@ class NovaOsViewModel(
                 traceId = traceId,
                 sourceModule = RuntimeModule.REASONING,
                 eventType = "reasoning.context.evaluated",
-                payload = "Context score: 0.94. Safety policy status: PASSED"
+                payload = "Context score: 0.96. Safety policy status: PASSED"
             )
             runtimeKernel.eventBus.publish(reasoningEvent)
 
@@ -122,17 +124,20 @@ class NovaOsViewModel(
                 traceId = traceId,
                 sourceModule = RuntimeModule.INFERENCE,
                 eventType = "inference.tokens.generated",
-                payload = "Generating response via quantized LLM engine..."
+                payload = "Intent parsed -> Resolving Android app launch target..."
             )
             runtimeKernel.eventBus.publish(inferenceEvent)
 
-            // 5. Execution Completed Event
+            // 5. Execute Action on Android OS
+            val result = actionExecutor.executeAction(userPrompt)
+
+            // 6. Execution Event
             val executionEvent = RuntimeEvent(
                 traceId = traceId,
                 sourceModule = RuntimeModule.EXECUTION,
-                eventType = "execution.action.success",
-                priority = EventPriority.HIGH,
-                payload = "Action completed for intent '$userPrompt'"
+                eventType = if (result.isSuccess) "execution.app.launched" else "execution.action.info",
+                priority = if (result.isSuccess) EventPriority.HIGH else EventPriority.NORMAL,
+                payload = result.message
             )
             runtimeKernel.eventBus.publish(executionEvent)
         }

@@ -1,6 +1,7 @@
 package com.nova.runtime.app.ui
 
-import com.nova.runtime.app.ui.components.ActivityItem
+import com.nova.runtime.app.action.ActionExecutionResult
+import com.nova.runtime.app.action.AndroidActionExecutor
 import com.nova.runtime.kernel.RuntimeKernel
 import com.nova.runtime.models.RuntimeModule
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +18,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+class FakeActionExecutor : AndroidActionExecutor(
+    context = org.mockito.Mockito.mock(android.content.Context::class.java)
+) {
+    override fun executeAction(rawPrompt: String): ActionExecutionResult {
+        return ActionExecutionResult(
+            isSuccess = true,
+            appName = "MockApp",
+            message = "Successfully opened MockApp for '$rawPrompt'"
+        )
+    }
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class NovaOsViewModelTest {
 
@@ -29,7 +42,7 @@ class NovaOsViewModelTest {
         Dispatchers.setMain(testDispatcher)
         kernel = RuntimeKernel.create()
         kernel.bootstrap()
-        viewModel = NovaOsViewModel(kernel)
+        viewModel = NovaOsViewModel(kernel, FakeActionExecutor())
     }
 
     @After
@@ -49,11 +62,10 @@ class NovaOsViewModelTest {
     @Test
     fun testSubmitCommandPublishesCognitiveEvents() = runTest(testDispatcher) {
         val initialSize = viewModel.activities.value.size
-        val prompt = "Open Camera and analyze scene"
+        val prompt = "open gmail"
 
         viewModel.submitCommand(prompt)
-        
-        // Ensure all events published in viewModelScope are processed
+
         advanceUntilIdle()
 
         val updatedActivities = viewModel.activities.value

@@ -2,6 +2,7 @@ package com.nova.runtime.app.di
 
 import com.nova.runtime.android.AndroidAdapterLayer
 import com.nova.runtime.android.AndroidAdapterLayerStub
+import com.nova.runtime.app.action.AndroidActionExecutor
 import com.nova.runtime.app.ui.NovaOsViewModel
 import com.nova.runtime.capability.CapabilityFramework
 import com.nova.runtime.capability.CapabilityFrameworkStub
@@ -26,6 +27,7 @@ import com.nova.runtime.storage.coordinator.StorageCoordinator
 import com.nova.runtime.storage.coordinator.StorageCoordinatorStub
 import com.nova.runtime.understanding.SemanticUnderstandingPipeline
 import com.nova.runtime.understanding.SemanticUnderstandingPipelineStub
+import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
@@ -42,7 +44,8 @@ val sprint0StubsModule = module {
     single<ExecutionRuntime> { ExecutionRuntimeStub() }
     single<ConversationService> { ConversationServiceStub() }
     single<AndroidAdapterLayer> { AndroidAdapterLayerStub() }
-    viewModel { NovaOsViewModel(get()) }
+    single { AndroidActionExecutor(androidContext()) }
+    viewModel { NovaOsViewModel(get(), get()) }
 }
 
 val runtimeModule = module {
