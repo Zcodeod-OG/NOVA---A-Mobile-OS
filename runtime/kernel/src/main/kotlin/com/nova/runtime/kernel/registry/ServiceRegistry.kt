@@ -11,11 +11,10 @@ interface ServiceRegistry {
     fun <T : NovaService> register(serviceType: Class<T>, instance: T) =
         register(serviceType.kotlin, instance)
 
-    fun <T : NovaService> get(serviceType: KClass<T>): T
-    fun <T : NovaService> get(serviceType: Class<T>): T = get(serviceType.kotlin)
+    fun <T : NovaService> get(serviceType: KClass<out T>): T
+    fun <T : NovaService> get(serviceType: Class<out T>): T = get(serviceType.kotlin)
 
-    fun <T : NovaService> getOrNull(serviceType: KClass<T>): T?
-    fun getOrNull(serviceType: KClass<out NovaService>): NovaService?
+    fun <T : NovaService> getOrNull(serviceType: KClass<out T>): T?
     fun contains(serviceType: KClass<out NovaService>): Boolean
     fun registeredTypes(): Set<KClass<out NovaService>>
     fun clear()
@@ -32,18 +31,15 @@ class DefaultServiceRegistry : ServiceRegistry {
     }
 
     @Suppress("UNCHECKED_CAST")
-    override fun <T : NovaService> get(serviceType: KClass<T>): T {
+    override fun <T : NovaService> get(serviceType: KClass<out T>): T {
         val service = services[serviceType]
             ?: throw NovaException(NovaErrors.serviceNotFound(serviceType.simpleName ?: "Unknown"))
         return service as T
     }
 
     @Suppress("UNCHECKED_CAST")
-    override fun <T : NovaService> getOrNull(serviceType: KClass<T>): T? =
+    override fun <T : NovaService> getOrNull(serviceType: KClass<out T>): T? =
         services[serviceType] as? T
-
-    override fun getOrNull(serviceType: KClass<out NovaService>): NovaService? =
-        services[serviceType]
 
     override fun contains(serviceType: KClass<out NovaService>): Boolean =
         services.containsKey(serviceType)

@@ -116,7 +116,7 @@ class InMemoryEventBus(
  * Priority queue helper for async event scheduling (reserved for future worker integration).
  */
 class EventPriorityQueue {
-    private val queue = PriorityBlockingQueue(11) { a, b ->
+    private val queue = PriorityBlockingQueue<RuntimeEvent>(11) { a, b ->
         a.priority.ordinal.compareTo(b.priority.ordinal)
     }
 

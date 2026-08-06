@@ -20,7 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,13 +30,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.nova.runtime.app.ui.components.ActivityItem
 import com.nova.runtime.app.ui.components.ActivityStream
 import com.nova.runtime.app.ui.components.CommandBar
 import com.nova.runtime.app.ui.components.SystemHeader
 import com.nova.runtime.app.ui.theme.NovaCyanAccent
 import com.nova.runtime.app.ui.theme.NovaDarkBackground
-import com.nova.runtime.app.ui.theme.NovaIndigoAccent
 import com.nova.runtime.app.ui.theme.NovaSurfaceDark
 import com.nova.runtime.app.ui.theme.NovaSurfaceVariant
 import com.nova.runtime.app.ui.theme.NovaTextPrimary
@@ -50,9 +49,12 @@ data class CapabilityModule(
 
 @Composable
 fun NovaOsScreen(
-    lifecycleState: RuntimeLifecycleState,
+    viewModel: NovaOsViewModel,
     modifier: Modifier = Modifier
 ) {
+    val lifecycleState by viewModel.lifecycleState.collectAsState()
+    val activityFeed by viewModel.activities.collectAsState()
+
     val modules = remember {
         listOf(
             CapabilityModule("Kernel Engine", "Core lifecycle & event bus", true),
@@ -64,15 +66,6 @@ fun NovaOsScreen(
         )
     }
 
-    val activityFeed = remember {
-        mutableStateListOf(
-            ActivityItem("14:55:01", "KERNEL", "System boot initiated. Loading Koin DI modules..."),
-            ActivityItem("14:55:02", "MEMORY", "Vector DB initialized (512-dim embedding engine)"),
-            ActivityItem("14:55:03", "INFERENCE", "Quantized model weight loaded: NOVA-Local-1.0"),
-            ActivityItem("14:55:04", "KERNEL", "Runtime lifecycle transitioned to READY", isAlert = true)
-        )
-    }
-
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = NovaDarkBackground,
@@ -80,23 +73,7 @@ fun NovaOsScreen(
             Box(modifier = Modifier.padding(16.dp)) {
                 CommandBar(
                     onCommandSubmit = { command ->
-                        activityFeed.add(
-                            0,
-                            ActivityItem(
-                                timestamp = "NOW",
-                                source = "USER",
-                                message = command,
-                                isAlert = true
-                            )
-                        )
-                        activityFeed.add(
-                            0,
-                            ActivityItem(
-                                timestamp = "NOW",
-                                source = "PLANNER",
-                                message = "Processing intent: '$command' -> Generating plan..."
-                            )
-                        )
+                        viewModel.submitCommand(command)
                     }
                 )
             }
@@ -111,13 +88,13 @@ fun NovaOsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // 1. Top System Telemetry Header
-            SystemHeader(lifecycleState = lifecycleState)
+            SystemHeader(lifecycleState = lifecycleState ?: RuntimeLifecycleState.READY)
 
             Spacer(modifier = Modifier.height(16.dp))
 
             // 2. Cognitive Modules Grid
             Text(
-                text = "COGNITIVE RUNTIME MODULES",
+                text = "COGNITIVE RUNTIME MODULES (TAP TO INSPECT)",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = NovaTextSecondary,
@@ -133,7 +110,10 @@ fun NovaOsScreen(
                 modifier = Modifier.height(180.dp)
             ) {
                 items(modules) { module ->
-                    ModuleCard(module = module)
+                    ModuleCard(
+                        module = module,
+                        onCardClick = { viewModel.inspectModule(module.title) }
+                    )
                 }
             }
 
@@ -151,6 +131,7 @@ fun NovaOsScreen(
 @Composable
 fun ModuleCard(
     module: CapabilityModule,
+    onCardClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -158,7 +139,7 @@ fun ModuleCard(
             .clip(RoundedCornerShape(12.dp))
             .background(NovaSurfaceDark)
             .border(1.dp, NovaSurfaceVariant, RoundedCornerShape(12.dp))
-            .clickable { }
+            .clickable { onCardClick() }
             .padding(10.dp)
     ) {
         Column {

@@ -7,6 +7,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":runtime:models"))
     implementation(libs.kotlin.stdlib)
 
     testImplementation(libs.kotlin.test.junit)
