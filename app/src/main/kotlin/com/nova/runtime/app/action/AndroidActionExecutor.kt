@@ -2,11 +2,12 @@ package com.nova.runtime.app.action
 
 import android.content.Context
 import android.content.Intent
-import android.hardware.camera2.CameraManager
 import android.net.Uri
 import android.provider.AlarmClock
 import android.provider.MediaStore
 import android.provider.Settings
+import com.nova.runtime.app.service.NovaAccessibilityService
+import com.nova.runtime.app.service.NovaNotificationListenerService
 import java.net.URLEncoder
 
 data class ActionExecutionResult(
@@ -20,9 +21,15 @@ open class AndroidActionExecutor(
 ) {
     private val intentEngine = CognitiveIntentEngine()
     private val fileShareManager = FileShareManager(context)
-    private var isTorchOn = false
+    private val hardwareController = SystemHardwareController(context)
+    private val toolRouter = AutonomousToolRouter(context, hardwareController)
 
     open fun executeAction(rawPrompt: String): ActionExecutionResult {
+        // Multi-step complex pipeline handling
+        if (rawPrompt.contains("and") || rawPrompt.contains("then") || rawPrompt.contains("click") || rawPrompt.contains("type")) {
+            return toolRouter.planAndExecuteMultiStepPrompt(rawPrompt)
+        }
+
         val parsedIntent = intentEngine.parseIntent(rawPrompt)
 
         return when (parsedIntent.action) {
@@ -96,39 +103,23 @@ open class AndroidActionExecutor(
 
     private fun handleToggleSetting(intentData: ParsedIntent): ActionExecutionResult {
         return when (intentData.targetApp) {
-            "Flashlight" -> toggleFlashlight()
-            "Wi-Fi" -> launchIntent(Intent(Settings.ACTION_WIFI_SETTINGS), "Wi-Fi Settings", "Opened Wi-Fi Settings")
-            "Bluetooth" -> launchIntent(Intent(Settings.ACTION_BLUETOOTH_SETTINGS), "Bluetooth Settings", "Opened Bluetooth Settings")
-            "Sound" -> launchIntent(Intent(Settings.ACTION_SOUND_SETTINGS), "Sound Settings", "Opened Sound & Volume Settings")
+            "Flashlight" -> hardwareController.toggleFlashlight()
+            "Wi-Fi" -> hardwareController.openWifiSettings()
+            "Bluetooth" -> hardwareController.openBluetoothSettings()
+            "Sound" -> hardwareController.openDisplaySettings()
             else -> launchIntent(Intent(Settings.ACTION_SETTINGS), "Settings", "Opened System Settings")
         }
     }
 
-    private fun toggleFlashlight(): ActionExecutionResult {
-        return try {
-            val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
-            val cameraId = cameraManager?.cameraIdList?.firstOrNull()
-            if (cameraManager != null && cameraId != null) {
-                isTorchOn = !isTorchOn
-                cameraManager.setTorchMode(cameraId, isTorchOn)
-                ActionExecutionResult(
-                    isSuccess = true,
-                    appName = "Flashlight",
-                    message = "Toggled Flashlight ${if (isTorchOn) "ON" else "OFF"}"
-                )
-            } else {
-                ActionExecutionResult(false, "Flashlight", "Flashlight hardware unavailable")
-            }
-        } catch (e: Exception) {
-            launchIntent(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA), "Camera Flashlight", "Opened Camera for Flashlight control")
-        }
-    }
-
     private fun handleNavigateSystem(intentData: ParsedIntent): ActionExecutionResult {
-        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_HOME)
+        val accessibility = NovaAccessibilityService.instance
+        return if (accessibility != null) {
+            accessibility.performGlobalHome()
+            ActionExecutionResult(true, "Accessibility Navigation", "Autonomous Home Navigation via Accessibility Service")
+        } else {
+            val homeIntent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
+            launchIntent(homeIntent, "System Navigation", "Navigated to Android Home Screen")
         }
-        return launchIntent(homeIntent, "System Navigation", "Navigated to Android Home Screen")
     }
 
     private fun handleSearchContent(intentData: ParsedIntent): ActionExecutionResult {
@@ -155,7 +146,6 @@ open class AndroidActionExecutor(
     private fun smartLaunchApp(appNameOrPrompt: String): ActionExecutionResult {
         val cleanName = appNameOrPrompt.lowercase().trim()
 
-        // 1. Direct High-Priority Intent Mapping for Core System & Social Apps
         val directIntent = when {
             cleanName.contains("gmail") || cleanName.contains("mail") || cleanName.contains("email") -> {
                 val pmLaunch = context.packageManager.getLaunchIntentForPackage("com.google.android.gm")
@@ -201,7 +191,6 @@ open class AndroidActionExecutor(
             return launchIntent(directIntent, appNameOrPrompt, "Opened $appNameOrPrompt")
         }
 
-        // 2. Installed Package Matching Fallback
         return searchAndLaunchInstalledApp(cleanName)
     }
 
@@ -215,7 +204,6 @@ open class AndroidActionExecutor(
                 message = successMessage
             )
         } catch (e: Exception) {
-            // Web fallback if native app intent failed
             val webFallback = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=${URLEncoder.encode(appName, "UTF-8")}")).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
@@ -253,7 +241,6 @@ open class AndroidActionExecutor(
                 }
             }
 
-            // Ultimate fallback to Web search so any command performs a visible action!
             val webFallback = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=${URLEncoder.encode(prompt, "UTF-8")}")).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
