@@ -33,8 +33,16 @@ dependencies {
     implementation(project(":runtime:models"))
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation(libs.koin.core)
+    implementation(libs.kotlinx.coroutines.core)
     ksp(libs.room.compiler)
+
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation("androidx.room:room-testing:${libs.versions.room.get()}")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test:core:1.6.1")
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation("androidx.room:room-testing:${libs.versions.room.get()}")
 }

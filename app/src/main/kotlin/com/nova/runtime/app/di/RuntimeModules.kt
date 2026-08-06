@@ -4,8 +4,9 @@ import com.nova.runtime.android.AndroidAdapterLayer
 import com.nova.runtime.android.AndroidAdapterLayerStub
 import com.nova.runtime.capability.CapabilityFramework
 import com.nova.runtime.capability.CapabilityFrameworkStub
-import com.nova.runtime.conversation.ConversationService
-import com.nova.runtime.conversation.ConversationServiceStub
+import com.nova.runtime.app.conversation.SessionRepositoryPersistence
+import com.nova.runtime.conversation.di.conversationModule
+import com.nova.runtime.conversation.session.SessionPersistence
 import com.nova.runtime.execution.ExecutionRuntime
 import com.nova.runtime.execution.ExecutionRuntimeStub
 import com.nova.runtime.inference.AdaptiveInferenceEngine
@@ -21,29 +22,28 @@ import com.nova.runtime.policy.PolicyEngine
 import com.nova.runtime.policy.PolicyEngineStub
 import com.nova.runtime.reasoning.ReasoningEngine
 import com.nova.runtime.reasoning.ReasoningEngineStub
-import com.nova.runtime.storage.coordinator.StorageCoordinator
-import com.nova.runtime.storage.coordinator.StorageCoordinatorStub
-import com.nova.runtime.understanding.SemanticUnderstandingPipeline
-import com.nova.runtime.understanding.SemanticUnderstandingPipelineStub
+import com.nova.runtime.storage.di.storageModule
+import com.nova.runtime.understanding.di.understandingModule
 import org.koin.dsl.module
 
 /** Sprint 0 service stubs wired alongside Sprint 1 kernel infrastructure. */
 val sprint0StubsModule = module {
     single<AdaptiveInferenceEngine> { AdaptiveInferenceEngineStub() }
-    single<SemanticUnderstandingPipeline> { SemanticUnderstandingPipelineStub(get()) }
-    single<StorageCoordinator> { StorageCoordinatorStub() }
     single<MemoryPlatform> { MemoryPlatformStub(get()) }
     single<ReasoningEngine> { ReasoningEngineStub() }
     single<PlanningService> { PlanningServiceStub() }
     single<PolicyEngine> { PolicyEngineStub() }
     single<CapabilityFramework> { CapabilityFrameworkStub() }
     single<ExecutionRuntime> { ExecutionRuntimeStub() }
-    single<ConversationService> { ConversationServiceStub() }
     single<AndroidAdapterLayer> { AndroidAdapterLayerStub() }
 }
 
+val conversationPersistenceModule = module {
+    single<SessionPersistence> { SessionRepositoryPersistence(get()) }
+}
+
 val runtimeModule = module {
-    includes(kernelModule, sprint0StubsModule)
+    includes(kernelModule, sprint0StubsModule, understandingModule, conversationModule, conversationPersistenceModule)
     single {
         RuntimeKernel(
             serviceRegistry = get(),
