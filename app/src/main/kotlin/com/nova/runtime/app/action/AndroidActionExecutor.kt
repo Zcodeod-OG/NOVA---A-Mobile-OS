@@ -145,11 +145,64 @@ open class AndroidActionExecutor(
 
     private fun handleLaunchApp(intentData: ParsedIntent): ActionExecutionResult {
         val appName = intentData.targetApp ?: intentData.originalPrompt
-        return searchAndLaunchInstalledApp(appName)
+        return smartLaunchApp(appName)
     }
 
     private fun handleUnknownAction(intentData: ParsedIntent): ActionExecutionResult {
-        return searchAndLaunchInstalledApp(intentData.originalPrompt)
+        return smartLaunchApp(intentData.originalPrompt)
+    }
+
+    private fun smartLaunchApp(appNameOrPrompt: String): ActionExecutionResult {
+        val cleanName = appNameOrPrompt.lowercase().trim()
+
+        // 1. Direct High-Priority Intent Mapping for Core System & Social Apps
+        val directIntent = when {
+            cleanName.contains("gmail") || cleanName.contains("mail") || cleanName.contains("email") -> {
+                val pmLaunch = context.packageManager.getLaunchIntentForPackage("com.google.android.gm")
+                pmLaunch ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://mail.google.com"))
+            }
+            cleanName.contains("camera") || cleanName.contains("photo") || cleanName.contains("picture") -> {
+                Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
+            }
+            cleanName.contains("youtube") || cleanName.contains("video") -> {
+                val pmLaunch = context.packageManager.getLaunchIntentForPackage("com.google.android.youtube")
+                pmLaunch ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com"))
+            }
+            cleanName.contains("map") || cleanName.contains("navigation") || cleanName.contains("direction") -> {
+                Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=places"))
+            }
+            cleanName.contains("chrome") || cleanName.contains("browser") || cleanName.contains("web") -> {
+                Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com"))
+            }
+            cleanName.contains("setting") -> {
+                Intent(Settings.ACTION_SETTINGS)
+            }
+            cleanName.contains("clock") || cleanName.contains("alarm") || cleanName.contains("timer") -> {
+                Intent(AlarmClock.ACTION_SHOW_ALARMS)
+            }
+            cleanName.contains("phone") || cleanName.contains("dialer") -> {
+                Intent(Intent.ACTION_DIAL)
+            }
+            cleanName.contains("message") || cleanName.contains("sms") -> {
+                Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_APP_MESSAGING) }
+            }
+            cleanName.contains("whatsapp") -> {
+                val pmLaunch = context.packageManager.getLaunchIntentForPackage("com.whatsapp")
+                pmLaunch ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com"))
+            }
+            cleanName.contains("spotify") || cleanName.contains("music") -> {
+                val pmLaunch = context.packageManager.getLaunchIntentForPackage("com.spotify.music")
+                pmLaunch ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://open.spotify.com"))
+            }
+            else -> null
+        }
+
+        if (directIntent != null) {
+            return launchIntent(directIntent, appNameOrPrompt, "Opened $appNameOrPrompt")
+        }
+
+        // 2. Installed Package Matching Fallback
+        return searchAndLaunchInstalledApp(cleanName)
     }
 
     private fun launchIntent(intent: Intent, appName: String, successMessage: String = "Successfully executed $appName"): ActionExecutionResult {
@@ -162,11 +215,24 @@ open class AndroidActionExecutor(
                 message = successMessage
             )
         } catch (e: Exception) {
-            ActionExecutionResult(
-                isSuccess = false,
-                appName = appName,
-                message = "Failed to execute $appName: ${e.localizedMessage}"
-            )
+            // Web fallback if native app intent failed
+            val webFallback = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=${URLEncoder.encode(appName, "UTF-8")}")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                context.startActivity(webFallback)
+                ActionExecutionResult(
+                    isSuccess = true,
+                    appName = appName,
+                    message = "Opened web search fallback for $appName"
+                )
+            } catch (ex: Exception) {
+                ActionExecutionResult(
+                    isSuccess = false,
+                    appName = appName,
+                    message = "Failed to execute $appName: ${e.localizedMessage}"
+                )
+            }
         }
     }
 
@@ -177,7 +243,9 @@ open class AndroidActionExecutor(
 
             for (app in packages) {
                 val appLabel = pm.getApplicationLabel(app).toString().lowercase()
-                if (prompt.lowercase().contains(appLabel) && appLabel.length >= 3) {
+                val pkgName = app.packageName.lowercase()
+
+                if (prompt.contains(appLabel) || prompt.contains(pkgName) || appLabel.contains(prompt)) {
                     val intent = pm.getLaunchIntentForPackage(app.packageName)
                     if (intent != null) {
                         return launchIntent(intent, pm.getApplicationLabel(app).toString(), "Opened ${pm.getApplicationLabel(app)}")
@@ -185,10 +253,16 @@ open class AndroidActionExecutor(
                 }
             }
 
+            // Ultimate fallback to Web search so any command performs a visible action!
+            val webFallback = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=${URLEncoder.encode(prompt, "UTF-8")}")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(webFallback)
+
             ActionExecutionResult(
-                isSuccess = false,
-                appName = "None",
-                message = "Parsed command for '$prompt' -> Executed action"
+                isSuccess = true,
+                appName = prompt,
+                message = "Executed action & opened web search for '$prompt'"
             )
         } catch (e: Exception) {
             ActionExecutionResult(
