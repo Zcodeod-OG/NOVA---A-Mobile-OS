@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 
-internal object PermissionChecker {
+object PermissionChecker {
     fun ensureGranted(context: Context, permission: String) {
         if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
             throw SecurityException(permission)

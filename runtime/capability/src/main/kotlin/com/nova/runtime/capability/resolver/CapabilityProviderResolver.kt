@@ -16,14 +16,29 @@ class DefaultCapabilityProviderResolver(
 ) : CapabilityProviderResolver {
 
     override suspend fun resolve(request: CapabilityResolutionRequest): CapabilityResolutionResult? {
-        val candidates = registry.lookupByType(request.capabilityType)
+        for (variant in CapabilityOperationAliases.variants(request.capabilityType, request.operation)) {
+            resolveDirect(
+                request = request,
+                capabilityType = variant.capabilityType,
+                operation = variant.operation,
+            )?.let { return it }
+        }
+        return null
+    }
+
+    private suspend fun resolveDirect(
+        request: CapabilityResolutionRequest,
+        capabilityType: String,
+        operation: String,
+    ): CapabilityResolutionResult? {
+        val candidates = registry.lookupByType(capabilityType)
             .filter { registration ->
                 lifecycleManager.getState(registration.metadata.name, registration.metadata.version) ==
                     CapabilityLifecycleState.ACTIVE
             }
             .filter { registration ->
-                request.operation in registration.provider.supportedOperations() ||
-                    request.operation == "rollback"
+                operation in registration.provider.supportedOperations() ||
+                    operation == "rollback"
             }
 
         if (candidates.isEmpty()) return null
@@ -32,7 +47,8 @@ class DefaultCapabilityProviderResolver(
         val selected = if (preferredProviderId != null) {
             candidates.firstOrNull { it.provider.providerId == preferredProviderId }
         } else {
-            candidates.firstOrNull()
+            candidates.sortedBy { if (it.provider.providerId.startsWith("android-")) 0 else 1 }
+                .firstOrNull()
         } ?: return null
 
         return CapabilityResolutionResult(

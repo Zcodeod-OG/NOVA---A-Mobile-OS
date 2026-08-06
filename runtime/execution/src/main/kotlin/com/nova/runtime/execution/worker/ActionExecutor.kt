@@ -42,6 +42,15 @@ class StubCapabilityActionExecutor(
             )
         }
 
+        if (node.actionType !in CAPABILITY_ACTION_TYPES) {
+            return NodeExecutionOutcome.Success(
+                outputs = mapOf(
+                    "taskKey" to (node.outputs["taskKey"] ?: node.actionType),
+                    "status" to "skipped",
+                ),
+            )
+        }
+
         val simulatedDelayMs = node.inputs["simulateDelayMs"]?.toLongOrNull() ?: 0L
         if (simulatedDelayMs > 0) {
             delay(simulatedDelayMs)
@@ -93,6 +102,10 @@ class StubCapabilityActionExecutor(
             actionType.contains("media", ignoreCase = true) -> "media"
             else -> "device"
         }
+
+    companion object {
+        private val CAPABILITY_ACTION_TYPES = setOf("execute_capability")
+    }
 }
 
 /** Concurrent worker pool executing ready actions. */

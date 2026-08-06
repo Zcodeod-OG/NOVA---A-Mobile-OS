@@ -4,6 +4,7 @@ import com.nova.runtime.capability.lifecycle.DefaultCapabilityLifecycleManager
 import com.nova.runtime.capability.model.CapabilityLifecycleState
 import com.nova.runtime.capability.model.CapabilityResolutionRequest
 import com.nova.runtime.capability.provider.StubCommunicationProvider
+import com.nova.runtime.capability.provider.StubCapabilityProvider
 import com.nova.runtime.capability.provider.StubTimeProvider
 import com.nova.runtime.capability.registry.DefaultCapabilityRegistry
 import kotlin.test.Test
@@ -82,6 +83,30 @@ class CapabilityProviderResolverTest {
 
         assertNotNull(result)
         assertEquals("stub-time", result.provider.providerId)
+    }
+
+    @Test
+    fun resolve_pipelineWhatsAppRequest_matchesQualifiedAndroidProvider() = runTest {
+        val qualifiedProvider =
+            object : StubCapabilityProvider(
+                providerId = "android-communication",
+                capabilityType = "communication",
+                version = "1.0.0",
+                operations = setOf("whatsapp.send_message"),
+            ) {}
+        val registry = DefaultCapabilityRegistry(listOf(qualifiedProvider))
+        val lifecycle = DefaultCapabilityLifecycleManager(registry)
+        val resolver = DefaultCapabilityProviderResolver(registry, lifecycle)
+
+        val result = resolver.resolve(
+            CapabilityResolutionRequest(
+                capabilityType = "whatsapp",
+                operation = "send_message",
+            ),
+        )
+
+        assertNotNull(result)
+        assertEquals("android-communication", result.provider.providerId)
     }
 
     @Test

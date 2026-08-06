@@ -43,7 +43,19 @@ class IntentAdapterImplTest : AndroidAdapterRobolectricTest() {
     }
 
     @Test
-    fun execute_dial_requiresPhoneNumber() = runTest {
+    fun execute_share_withPackageName_succeeds() = runTest {
+        val result = adapter.execute(
+            IntentOperations.SHARE,
+            mapOf("text" to "hello", "packageName" to "com.example.app"),
+            traceId,
+        )
+        assertTrue(result is CapabilityResult.Success)
+        val success = result as CapabilityResult.Success
+        assertEquals("shared", success.output["status"])
+        assertEquals("com.example.app", success.output["packageName"])
+    }
+
+    @Test
         val result = adapter.execute(IntentOperations.DIAL, emptyMap(), traceId)
         assertTrue(result is CapabilityResult.Failure)
         val failure = result as CapabilityResult.Failure

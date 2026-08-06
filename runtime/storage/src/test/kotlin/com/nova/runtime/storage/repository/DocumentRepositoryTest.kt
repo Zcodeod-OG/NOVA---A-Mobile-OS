@@ -82,7 +82,15 @@ class DocumentRepositoryTest {
         override suspend fun searchByName(query: String): List<DocumentEntity> =
             records.values.filter { it.name.contains(query, ignoreCase = true) }
 
+        override suspend fun searchFullText(query: String, limit: Int, offset: Int): List<DocumentEntity> =
+            searchByName(query).drop(offset).take(limit)
+
+        override suspend fun countFullText(query: String): Int = searchByName(query).size
+
         override suspend fun getByProjectId(projectId: UUID): List<DocumentEntity> =
             records.values.filter { it.projectId == projectId }
+
+        override suspend fun listUnindexed(limit: Int): List<DocumentEntity> =
+            records.values.filter { it.embeddingId == null }.take(limit)
     }
 }

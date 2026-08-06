@@ -13,7 +13,7 @@ interface IntentClassifier {
 }
 
 /**
- * Placeholder intent classification — deterministic keyword routing only.
+ * Deterministic intent classification for the eight NOVA user features plus legacy fallbacks.
  */
 class PlaceholderIntentClassifier : IntentClassifier {
     override suspend fun classify(normalized: NormalizedObservation): DetectedIntent {
@@ -26,14 +26,21 @@ class PlaceholderIntentClassifier : IntentClassifier {
             )
         }
 
-        val match = INTENT_KEYWORDS.firstOrNull { (keywords, _) ->
-            keywords.any { keyword -> keyword in payload }
-        }
+        val match = INTENT_PATTERNS.firstOrNull { pattern -> pattern.matches(payload) }
+            ?: LEGACY_KEYWORDS.firstOrNull { (keywords, _) ->
+                keywords.any { keyword -> keyword in payload }
+            }?.let { (_, intentType) ->
+                IntentPattern(
+                    intentType = intentType,
+                    goal = intentType,
+                    matcher = { true },
+                )
+            }
 
         return if (match != null) {
             DetectedIntent(
-                goal = match.second,
-                intentType = match.second,
+                goal = match.goal,
+                intentType = match.intentType,
                 confidence = PLACEHOLDER_CONFIDENCE,
             )
         } else {
@@ -45,13 +52,52 @@ class PlaceholderIntentClassifier : IntentClassifier {
         }
     }
 
+    private data class IntentPattern(
+        val intentType: String,
+        val goal: String = intentType,
+        val matcher: (String) -> Boolean,
+    ) {
+        fun matches(payload: String): Boolean = matcher(payload)
+    }
+
     companion object {
-        private const val PLACEHOLDER_CONFIDENCE = 0.8
+        private const val PLACEHOLDER_CONFIDENCE = 0.85
         private const val FALLBACK_CONFIDENCE = 0.55
 
-        private val INTENT_KEYWORDS = listOf(
-            listOf("remind", "reminder", "alarm") to "set_reminder",
-            listOf("call", "text", "message", "whatsapp", "sms") to "send_message",
+        private val INTENT_PATTERNS = listOf(
+            IntentPattern("send_whatsapp_message") { payload ->
+                "whatsapp" in payload && listOf("message", "send", "text", "saying").any { it in payload }
+            },
+            IntentPattern("semantic_search") { payload ->
+                "semantic" in payload && listOf("search", "find", "query").any { it in payload }
+            },
+            IntentPattern("search_photos") { payload ->
+                listOf("photo", "photos", "picture", "pictures", "gallery").any { it in payload } &&
+                    listOf("search", "find", "show", "look").any { it in payload }
+            },
+            IntentPattern("search_documents") { payload ->
+                listOf("document", "documents", "doc", "docs", "pdf").any { it in payload } &&
+                    listOf("search", "find", "look").any { it in payload } &&
+                    "share" !in payload
+            },
+            IntentPattern("set_alarm") { payload ->
+                "alarm" in payload && listOf("set", "create", "for", "at").any { it in payload }
+            },
+            IntentPattern("create_calendar_event") { payload ->
+                ("calendar" in payload || "event" in payload || "meeting" in payload) &&
+                    listOf("create", "schedule", "add", "set", "tomorrow").any { it in payload }
+            },
+            IntentPattern("lookup_contact") { payload ->
+                "contact" in payload && listOf("lookup", "look up", "find", "search", "get").any { it in payload }
+            },
+            IntentPattern("share_file") { payload ->
+                "share" in payload && listOf("file", "document", "pdf", "report").any { it in payload }
+            },
+        )
+
+        private val LEGACY_KEYWORDS = listOf(
+            listOf("remind", "reminder") to "set_reminder",
+            listOf("call", "text", "message", "sms") to "send_message",
             listOf("search", "find", "look for", "where is") to "search",
             listOf("schedule", "calendar", "meeting", "event") to "manage_calendar",
             listOf("open", "launch", "start") to "open_application",

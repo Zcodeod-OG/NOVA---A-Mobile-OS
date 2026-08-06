@@ -110,7 +110,7 @@ class CapabilityFrameworkImplTest {
     fun discover_returnsActiveCapabilityKeys() = runTest {
         val framework = createFramework(defaultStubProviders())
         val discovered = framework.discover()
-        assertEquals(6, discovered.size)
+        assertEquals(12, discovered.size)
         assertTrue(discovered.any { it.startsWith("stub-communication:") })
     }
 

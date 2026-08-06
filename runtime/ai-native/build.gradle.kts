@@ -30,6 +30,7 @@ dependencies {
     implementation(project(":runtime:conversation"))
     implementation(project(":runtime:storage"))
     implementation(project(":runtime:models"))
+    implementation(project(":runtime:capability"))
     implementation(project(":runtime:utils"))
     implementation(libs.koin.android)
     implementation(libs.kotlinx.coroutines.android)

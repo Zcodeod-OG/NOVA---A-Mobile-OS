@@ -6,6 +6,7 @@ import com.nova.runtime.conversation.dialogue.DialogueManager
 import com.nova.runtime.conversation.events.ConversationEventPublisher
 import com.nova.runtime.conversation.input.UnifiedInputProcessor
 import com.nova.runtime.conversation.observation.ObservationGenerator
+import com.nova.runtime.conversation.response.ConversationResponseGenerator
 import com.nova.runtime.conversation.response.ResponsePipeline
 import com.nova.runtime.conversation.response.StubConversationResponseGenerator
 import com.nova.runtime.conversation.session.SessionManager
@@ -19,7 +20,7 @@ import org.koin.dsl.module
 val conversationModule = module {
     single<SpeechRecognizer> { StubSpeechRecognizer() }
     single<TextToSpeech> { StubTextToSpeech() }
-    single { StubConversationResponseGenerator() }
+    single<ConversationResponseGenerator> { StubConversationResponseGenerator() }
     single { ResponsePipeline(get()) }
     single { DialogueManager() }
     single { ObservationGenerator(get()) }

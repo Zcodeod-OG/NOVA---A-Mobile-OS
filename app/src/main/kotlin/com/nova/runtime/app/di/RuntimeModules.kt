@@ -1,6 +1,7 @@
 package com.nova.runtime.app.di
 
 import com.nova.runtime.android.di.androidAdapterModule
+import com.nova.runtime.android.di.androidCapabilityModule
 import com.nova.runtime.capability.di.capabilityModule
 import com.nova.runtime.app.conversation.SessionRepositoryPersistence
 import com.nova.runtime.conversation.di.conversationModule
@@ -19,6 +20,7 @@ import com.nova.runtime.planner.di.plannerModule
 import com.nova.runtime.policy.di.policyModule
 import com.nova.runtime.reasoning.di.reasoningModule
 import com.nova.runtime.storage.di.storageModule
+import com.nova.runtime.orchestrator.di.orchestratorModule
 import com.nova.runtime.understanding.di.understandingModule
 import org.koin.dsl.module
 
@@ -45,11 +47,13 @@ val runtimeModule = module {
         policyModule,
         capabilityModule,
         androidAdapterModule,
+        androidCapabilityModule,
         executionModule,
         sprint0StubsModule,
         understandingModule,
         conversationModule,
         conversationPersistenceModule,
+        orchestratorModule,
     )
     single {
         RuntimeKernel(

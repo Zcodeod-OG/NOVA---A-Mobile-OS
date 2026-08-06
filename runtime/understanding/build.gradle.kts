@@ -18,6 +18,8 @@ dependencies {
 
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.junit.jupiter.engine)
+    testImplementation("org.junit.jupiter:junit-jupiter-params:${libs.versions.junit.jupiter.get()}")
 }
 
 tasks.test {

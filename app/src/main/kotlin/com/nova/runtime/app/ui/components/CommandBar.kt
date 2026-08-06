@@ -35,7 +35,8 @@ import com.nova.runtime.app.ui.theme.NovaTextSecondary
 @Composable
 fun CommandBar(
     onCommandSubmit: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     var queryText by remember { mutableStateOf("") }
 
@@ -82,7 +83,7 @@ fun CommandBar(
             colors = ButtonDefaults.buttonColors(
                 containerColor = NovaCyanAccent
             ),
-            enabled = queryText.isNotBlank()
+            enabled = queryText.isNotBlank() && enabled
         ) {
             Text(
                 text = "EXECUTE",

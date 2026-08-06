@@ -42,7 +42,7 @@ class DefaultNirGeneratorTest {
         assertEquals(DefaultNirGenerator.NIR_VERSION, nir.version)
         assertEquals("set_reminder", nir.goal)
         assertEquals(listOf("tomorrow"), nir.entities)
-        assertEquals(listOf("time", "notifications"), nir.requiredCapabilities)
+        assertEquals(listOf("alarm"), nir.requiredCapabilities)
         assertTrue(nir.confidence in 0.0..1.0)
         assertEquals("0", nir.context["inferenceTier"])
     }

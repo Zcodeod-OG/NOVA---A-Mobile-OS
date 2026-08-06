@@ -22,6 +22,8 @@ import com.nova.runtime.android.ocrAdapter.OcrAdapter
 import com.nova.runtime.android.ocrAdapter.OcrAdapterStub
 import com.nova.runtime.android.storageAccessAdapter.StorageAccessAdapter
 import com.nova.runtime.android.storageAccessAdapter.StorageAccessAdapterImpl
+import com.nova.runtime.android.mediaStoreAdapter.MediaStoreQueryPortImpl
+import com.nova.runtime.storage.search.MediaStoreQueryPort
 import com.nova.runtime.utils.logging.NovaLogger
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
@@ -34,6 +36,7 @@ val androidAdapterModule = module {
     single<CalendarAdapter> { CalendarAdapterImpl(androidContext(), get()) }
     single<AlarmAdapter> { AlarmAdapterImpl(androidContext(), get()) }
     single<MediaStoreAdapter> { MediaStoreAdapterImpl(androidContext(), get()) }
+    single<MediaStoreQueryPort>(override = true) { MediaStoreQueryPortImpl(get()) }
     single<NotificationAdapter> { NotificationAdapterImpl(androidContext(), get()) }
     single<AccessibilityAdapter> { AccessibilityAdapterImpl(get(), get()) }
     single<StorageAccessAdapter> { StorageAccessAdapterImpl(androidContext(), get()) }
@@ -60,6 +63,7 @@ internal fun androidAdapterTestModule(logger: NovaLogger) = module {
     single<CalendarAdapter> { CalendarAdapterImpl(androidContext(), logger) }
     single<AlarmAdapter> { AlarmAdapterImpl(androidContext(), logger) }
     single<MediaStoreAdapter> { MediaStoreAdapterImpl(androidContext(), logger) }
+    single<MediaStoreQueryPort>(override = true) { MediaStoreQueryPortImpl(get()) }
     single<NotificationAdapter> { NotificationAdapterImpl(androidContext(), logger) }
     single<AccessibilityAdapter> { AccessibilityAdapterImpl(get(), logger) }
     single<StorageAccessAdapter> { StorageAccessAdapterImpl(androidContext(), logger) }

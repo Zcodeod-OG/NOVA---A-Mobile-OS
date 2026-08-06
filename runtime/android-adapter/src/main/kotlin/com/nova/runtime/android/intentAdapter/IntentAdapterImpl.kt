@@ -64,15 +64,29 @@ class IntentAdapterImpl(
         val text = parameters["text"]
         val uri = parameters["uri"]
         val mimeType = parameters["mimeType"] ?: "text/plain"
+        val packageName = parameters["packageName"]
         val intent =
             Intent(Intent.ACTION_SEND).apply {
                 type = mimeType
                 text?.let { putExtra(Intent.EXTRA_TEXT, it) }
-                uri?.let { putExtra(Intent.EXTRA_STREAM, Uri.parse(it)) }
+                uri?.let {
+                    putExtra(Intent.EXTRA_STREAM, Uri.parse(it))
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                packageName?.let { setPackage(it) }
             }
-        context.startActivity(Intent.createChooser(intent, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        return mapOf("status" to "shared")
+        val launchIntent =
+            if (packageName.isNullOrBlank()) {
+                Intent.createChooser(intent, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            } else {
+                intent
+            }
+        context.startActivity(launchIntent)
+        return buildMap {
+            put("status", "shared")
+            packageName?.let { put("packageName", it) }
+        }
     }
 
     private fun viewDocument(parameters: Map<String, String>): Map<String, String> {
@@ -106,12 +120,18 @@ class IntentAdapterImpl(
 
     private fun openUrl(parameters: Map<String, String>): Map<String, String> {
         val url = parameters.require("url")
+        val packageName = parameters["packageName"]
         val intent =
             Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                packageName?.let { setPackage(it) }
             }
         context.startActivity(intent)
-        return mapOf("status" to "opened", "url" to url)
+        return buildMap {
+            put("status", "opened")
+            put("url", url)
+            packageName?.let { put("packageName", it) }
+        }
     }
 
     private fun Map<String, String>.require(key: String): String =

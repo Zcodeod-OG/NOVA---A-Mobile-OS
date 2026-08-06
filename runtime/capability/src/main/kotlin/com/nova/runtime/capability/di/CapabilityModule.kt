@@ -7,6 +7,7 @@ import com.nova.runtime.capability.health.CapabilityHealthMonitor
 import com.nova.runtime.capability.health.DefaultCapabilityHealthMonitor
 import com.nova.runtime.capability.lifecycle.CapabilityLifecycleManager
 import com.nova.runtime.capability.lifecycle.DefaultCapabilityLifecycleManager
+import com.nova.runtime.capability.provider.CapabilityProvider
 import com.nova.runtime.capability.provider.defaultStubProviders
 import com.nova.runtime.capability.registry.CapabilityRegistry
 import com.nova.runtime.capability.registry.DefaultCapabilityRegistry
@@ -18,8 +19,9 @@ import org.koin.dsl.module
 
 /** Koin DI wiring for Capability Framework per MSP §11. */
 val capabilityModule = module {
+    single<List<CapabilityProvider>> { defaultStubProviders() }
     single<CapabilityRegistry> {
-        DefaultCapabilityRegistry(initialProviders = defaultStubProviders())
+        DefaultCapabilityRegistry(initialProviders = get())
     }
     single<CapabilityLifecycleManager> { DefaultCapabilityLifecycleManager(get()) }
     single<CapabilityProviderResolver> {

@@ -34,6 +34,31 @@ interface DocumentDao {
     @Query("SELECT * FROM documents WHERE name LIKE '%' || :query || '%' ORDER BY modifiedAt DESC")
     suspend fun searchByName(query: String): List<DocumentEntity>
 
+    @Query(
+        """
+        SELECT * FROM documents
+        WHERE name LIKE '%' || :query || '%'
+           OR path LIKE '%' || :query || '%'
+           OR extension LIKE '%' || :query || '%'
+        ORDER BY modifiedAt DESC
+        LIMIT :limit OFFSET :offset
+        """,
+    )
+    suspend fun searchFullText(query: String, limit: Int, offset: Int): List<DocumentEntity>
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM documents
+        WHERE name LIKE '%' || :query || '%'
+           OR path LIKE '%' || :query || '%'
+           OR extension LIKE '%' || :query || '%'
+        """,
+    )
+    suspend fun countFullText(query: String): Int
+
     @Query("SELECT * FROM documents WHERE projectId = :projectId ORDER BY modifiedAt DESC")
     suspend fun getByProjectId(projectId: UUID): List<DocumentEntity>
+
+    @Query("SELECT * FROM documents WHERE embeddingId IS NULL ORDER BY modifiedAt DESC LIMIT :limit")
+    suspend fun listUnindexed(limit: Int): List<DocumentEntity>
 }

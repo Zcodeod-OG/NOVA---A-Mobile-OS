@@ -64,16 +64,46 @@ class DocumentDaoTest : StorageRobolectricTest() {
             assertNull(documentDao.getById(document.id))
         }
 
+    @Test
+    fun searchFullText_matchesPathAndExtension() =
+        runTest {
+            val target = sampleDocument(name = "readme", path = "/docs/quarterly/readme.txt", extension = "txt")
+            documentDao.insert(target)
+            documentDao.insert(sampleDocument(name = "other", path = "/other.pdf", extension = "pdf"))
+
+            val byPath = documentDao.searchFullText("quarterly", limit = 10, offset = 0)
+            val byExtension = documentDao.searchFullText("pdf", limit = 10, offset = 0)
+
+            assertEquals(1, byPath.size)
+            assertEquals(target.id, byPath.first().id)
+            assertEquals(1, byExtension.size)
+        }
+
+    @Test
+    fun listUnindexed_returnsDocumentsWithoutEmbedding() =
+        runTest {
+            val unindexed = sampleDocument(name = "pending")
+            val indexed = sampleDocument(name = "done").copy(embeddingId = UUID.randomUUID())
+            documentDao.insert(unindexed)
+            documentDao.insert(indexed)
+
+            val results = documentDao.listUnindexed(limit = 10)
+
+            assertEquals(1, results.size)
+            assertEquals(unindexed.id, results.first().id)
+        }
+
     private fun sampleDocument(
         id: UUID = UUID.randomUUID(),
         name: String = "notes.txt",
         path: String = "/storage/notes.txt",
+        extension: String = "txt",
     ): DocumentEntity =
         DocumentEntity(
             id = id,
             path = path,
             name = name,
-            extension = "txt",
+            extension = extension,
             mimeType = "text/plain",
             size = 128L,
             checksum = "abc123",

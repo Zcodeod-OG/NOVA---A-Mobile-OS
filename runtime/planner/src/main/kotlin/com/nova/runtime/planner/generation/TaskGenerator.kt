@@ -102,6 +102,13 @@ class DefaultTaskGenerator : TaskGenerator {
     ): Map<String, String> = buildMap {
         put("capability", capability)
         put("goal", nir.goal)
+        put("capabilityType", nir.constraints["capabilityType"] ?: capability)
+        put("operation", nir.constraints["operation"] ?: "execute")
+        nir.constraints["capabilityOperation"]?.let { put("capabilityOperation", it) }
+        nir.constraints["channel"]?.let { put("channel", it) }
+        nir.constraints["recipient"]?.let { put("recipient", it) }
+        nir.constraints["fileName"]?.let { put("fileName", it) }
+        nir.context["rawPayload"]?.let { put("query", it) }
         if (nir.entities.isNotEmpty()) {
             put("entities", nir.entities.sorted().joinToString(","))
         }

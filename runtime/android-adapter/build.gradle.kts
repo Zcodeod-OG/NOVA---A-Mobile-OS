@@ -28,6 +28,7 @@ dependencies {
     implementation(project(":runtime:models"))
     implementation(project(":runtime:ai-core"))
     implementation(project(":runtime:capability"))
+    implementation(project(":runtime:storage"))
     implementation(project(":runtime:utils"))
     implementation(libs.koin.android)
     implementation(libs.kotlinx.coroutines.android)

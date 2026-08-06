@@ -32,4 +32,32 @@ interface PhotoDao {
 
     @Query("SELECT * FROM photos WHERE ocrText LIKE '%' || :query || '%' ORDER BY takenAt DESC")
     suspend fun searchByOcr(query: String): List<PhotoEntity>
+
+    @Query(
+        """
+        SELECT * FROM photos
+        WHERE ocrText LIKE '%' || :query || '%'
+        ORDER BY takenAt DESC
+        LIMIT :limit OFFSET :offset
+        """,
+    )
+    suspend fun searchByOcrPaged(query: String, limit: Int, offset: Int): List<PhotoEntity>
+
+    @Query("SELECT COUNT(*) FROM photos WHERE ocrText LIKE '%' || :query || '%'")
+    suspend fun countByOcr(query: String): Int
+
+    @Query("SELECT * FROM photos ORDER BY takenAt DESC LIMIT :limit")
+    suspend fun listRecent(limit: Int): List<PhotoEntity>
+
+    @Query(
+        """
+        SELECT * FROM photos
+        WHERE embeddingId IS NULL
+          AND ocrText IS NOT NULL
+          AND ocrText != ''
+        ORDER BY takenAt DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun listUnindexedWithOcr(limit: Int): List<PhotoEntity>
 }

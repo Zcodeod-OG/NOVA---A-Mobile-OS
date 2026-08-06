@@ -2,6 +2,7 @@ package com.nova.runtime.app
 
 import android.app.Application
 import com.nova.runtime.app.di.aiIntegrationModule
+import com.nova.runtime.app.di.appUiModule
 import com.nova.runtime.app.di.executionPersistenceModule
 import com.nova.runtime.app.di.runtimeModule
 import com.nova.runtime.kernel.RuntimeKernel
@@ -23,6 +24,7 @@ class NovaApplication : Application() {
                 storageModule(this@NovaApplication),
                 executionPersistenceModule,
                 aiIntegrationModule,
+                appUiModule,
             )
         }
         runBlocking {

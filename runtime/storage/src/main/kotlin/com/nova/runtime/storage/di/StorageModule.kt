@@ -25,6 +25,7 @@ import com.nova.runtime.storage.repository.ProjectRepositoryImpl
 import com.nova.runtime.storage.repository.SessionRepository
 import com.nova.runtime.storage.repository.SessionRepositoryImpl
 import com.nova.runtime.storage.coordinator.StorageCoordinator
+import com.nova.runtime.storage.search.DocumentSearchService
 import com.nova.runtime.storage.vector.NoOpVectorIndex
 import com.nova.runtime.storage.vector.VectorIndex
 import org.koin.dsl.module
@@ -50,6 +51,8 @@ fun storageModule(context: Context) =
         single<PreferenceRepository> { PreferenceRepositoryImpl(get()) }
         single<ExecutionHistoryRepository> { ExecutionHistoryRepositoryImpl(get()) }
         single<EmbeddingRepository> { EmbeddingRepositoryImpl(get()) }
+
+        single { DocumentSearchService(documentDao = get(), logger = get()) }
 
         single<StorageCache<String, Map<String, String>>> { LruStorageCache(maxSize = 256) }
         single<VectorIndex> { NoOpVectorIndex() }

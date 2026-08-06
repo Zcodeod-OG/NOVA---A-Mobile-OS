@@ -54,7 +54,7 @@ class ExecutionCapabilityIntegrationTest {
 
         val node = ActionNode(
             id = UUID.randomUUID(),
-            actionType = "calendar",
+            actionType = "execute_capability",
             inputs = mapOf(
                 "capabilityType" to "time",
                 "operation" to "calendar",

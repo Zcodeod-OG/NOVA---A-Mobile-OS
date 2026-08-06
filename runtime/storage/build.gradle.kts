@@ -31,6 +31,7 @@ dependencies {
     implementation(libs.kotlin.stdlib)
     implementation(libs.androidx.core.ktx)
     implementation(project(":runtime:models"))
+    implementation(project(":runtime:utils"))
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     implementation(libs.koin.core)

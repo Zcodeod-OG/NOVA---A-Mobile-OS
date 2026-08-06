@@ -56,7 +56,7 @@ class SemanticUnderstandingPipelineImplTest {
         assertNotNull(nir)
         assertEquals("set_reminder", nir.goal)
         assertTrue(nir.entities.isNotEmpty())
-        assertTrue(nir.requiredCapabilities.contains("time"))
+        assertTrue(nir.requiredCapabilities.contains("alarm"))
 
         val eventTypes = eventBus.publishedEvents().map { it.eventType }
         assertTrue(UnderstandingEvents.OBSERVATION_NORMALIZED in eventTypes)
