@@ -31,9 +31,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nova.runtime.app.ui.theme.NovaCyanAccent
-import com.nova.runtime.app.ui.theme.NovaIndigoAccent
-import com.nova.runtime.app.ui.theme.NovaSurfaceDark
-import com.nova.runtime.app.ui.theme.NovaSurfaceVariant
 import com.nova.runtime.app.ui.theme.NovaTextPrimary
 import com.nova.runtime.app.ui.theme.NovaTextSecondary
 import com.nova.runtime.models.RuntimeLifecycleState
@@ -58,15 +55,14 @@ fun SystemHeader(
 
     val stateColor by animateColorAsState(
         targetValue = when (lifecycleState) {
-            RuntimeLifecycleState.RUNNING, RuntimeLifecycleState.READY -> NovaCyanAccent
-            RuntimeLifecycleState.INITIALIZING, RuntimeLifecycleState.PAUSED -> Color(0xFFF59E0B)
+            RuntimeLifecycleState.READY -> NovaCyanAccent
+            RuntimeLifecycleState.INITIALIZING, RuntimeLifecycleState.CREATED -> Color(0xFFF59E0B)
             else -> Color(0xFFEF4444)
         },
         label = "StateColor"
     )
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // Status Bar with Dynamic Island Notch
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
