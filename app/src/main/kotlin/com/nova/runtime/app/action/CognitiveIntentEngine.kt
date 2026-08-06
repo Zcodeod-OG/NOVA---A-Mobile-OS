@@ -9,6 +9,8 @@ enum class SemanticAction {
     SEARCH_CONTENT,
     TOGGLE_SETTING,
     NAVIGATE_SYSTEM,
+    SHARE_DOCUMENT,
+    PLAY_MEDIA,
     UNKNOWN
 }
 
@@ -27,23 +29,34 @@ class CognitiveIntentEngine {
         val lower = trimmed.lowercase(Locale.getDefault())
 
         return when {
-            // 1. WhatsApp or Direct Messaging Intent
+            // 1. Share File / Document / PDF Intent
+            lower.contains("send file") || lower.contains("share file") || lower.contains("send pdf") ||
+                    lower.contains("share pdf") || lower.contains("share document") || lower.contains("pdf") -> {
+                parseShareDocumentIntent(trimmed, lower)
+            }
+
+            // 2. Play Media / Spotify Music Intent
+            lower.contains("spotify") || lower.contains("play song") || lower.contains("play music") || lower.contains("play artist") -> {
+                parsePlayMediaIntent(trimmed, lower)
+            }
+
+            // 3. WhatsApp or Direct Messaging Intent
             lower.contains("whatsapp") || lower.startsWith("text") || lower.startsWith("send message") || lower.startsWith("message") || lower.startsWith("ping") -> {
                 parseMessageIntent(trimmed, lower)
             }
 
-            // 2. Phone Calling / Voice Calling Intent
+            // 4. Phone Calling / Voice Calling Intent
             lower.startsWith("call") || lower.startsWith("dial") || lower.startsWith("ring") || lower.contains("phone call") -> {
                 parseCallIntent(trimmed, lower)
             }
 
-            // 3. System Hardware / Settings Toggle Intent
+            // 5. System Hardware / Settings Toggle Intent
             lower.contains("flashlight") || lower.contains("torch") || lower.contains("wifi") || lower.contains("wi-fi") ||
                     lower.contains("bluetooth") || lower.contains("volume") || lower.contains("sound") || lower.contains("setting") -> {
                 parseSettingIntent(trimmed, lower)
             }
 
-            // 4. System Navigation / Close / Home Intent
+            // 6. System Navigation / Close / Home Intent
             lower.contains("go home") || lower.contains("home screen") || lower.contains("close app") || lower.contains("minimize") -> {
                 ParsedIntent(
                     action = SemanticAction.NAVIGATE_SYSTEM,
@@ -54,13 +67,13 @@ class CognitiveIntentEngine {
                 )
             }
 
-            // 5. Search / Video Playback Intent
+            // 7. Search / Video Playback Intent
             lower.startsWith("search") || lower.startsWith("play") || lower.startsWith("watch") || lower.startsWith("google") ||
                     lower.startsWith("find") || lower.startsWith("navigate") || lower.startsWith("directions") || lower.startsWith("download") -> {
                 parseSearchIntent(trimmed, lower)
             }
 
-            // 6. Launch / Open App Intent (Synonyms: open, launch, start, run, bring up, show)
+            // 8. Launch / Open App Intent
             lower.startsWith("open") || lower.startsWith("launch") || lower.startsWith("start") || lower.startsWith("run") ||
                     lower.startsWith("bring up") || lower.startsWith("show") || lower.startsWith("turn on") -> {
                 parseLaunchIntent(trimmed, lower)
@@ -73,11 +86,36 @@ class CognitiveIntentEngine {
         }
     }
 
+    private fun parseShareDocumentIntent(prompt: String, lower: String): ParsedIntent {
+        val isWhatsApp = lower.contains("whatsapp")
+        val app = if (isWhatsApp) "WhatsApp" else "File Share"
+        val fileName = extractAfterKeywords(prompt, listOf("send", "share", "file", "pdf", "document", "on", "whatsapp", "to"))
+
+        return ParsedIntent(
+            action = SemanticAction.SHARE_DOCUMENT,
+            targetApp = app,
+            recipient = extractRecipient(lower),
+            queryOrContent = fileName.ifBlank { "document.pdf" },
+            originalPrompt = prompt
+        )
+    }
+
+    private fun parsePlayMediaIntent(prompt: String, lower: String): ParsedIntent {
+        val targetApp = if (lower.contains("spotify")) "Spotify" else "YouTube Music"
+        val searchQuery = extractAfterKeywords(prompt, listOf("play", "song", "music", "artist", "on", "spotify", "youtube"))
+
+        return ParsedIntent(
+            action = SemanticAction.PLAY_MEDIA,
+            targetApp = targetApp,
+            recipient = null,
+            queryOrContent = searchQuery.ifBlank { prompt },
+            originalPrompt = prompt
+        )
+    }
+
     private fun parseMessageIntent(prompt: String, lower: String): ParsedIntent {
         val isWhatsApp = lower.contains("whatsapp")
         val app = if (isWhatsApp) "WhatsApp" else "Messages"
-
-        // Extract message content / recipient
         val content = extractAfterKeywords(prompt, listOf("whatsapp", "message", "text", "saying", "that", "to"))
 
         return ParsedIntent(

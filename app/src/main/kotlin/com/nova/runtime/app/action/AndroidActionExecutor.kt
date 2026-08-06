@@ -13,12 +13,15 @@ open class AndroidActionExecutor(
     private val context: Context
 ) {
     private val intentEngine = CognitiveIntentEngine()
+    private val fileShareManager = FileShareManager(context)
     private var isTorchOn = false
 
     open fun executeAction(rawPrompt: String): ActionExecutionResult {
         val parsedIntent = intentEngine.parseIntent(rawPrompt)
 
         return when (parsedIntent.action) {
+            SemanticAction.SHARE_DOCUMENT -> fileShareManager.shareDocumentOrFile(parsedIntent.queryOrContent ?: "file.pdf", parsedIntent.targetApp)
+            SemanticAction.PLAY_MEDIA -> handlePlayMedia(parsedIntent)
             SemanticAction.SEND_MESSAGE -> handleSendMessage(parsedIntent)
             SemanticAction.MAKE_CALL -> handleMakeCall(parsedIntent)
             SemanticAction.TOGGLE_SETTING -> handleToggleSetting(parsedIntent)
@@ -26,6 +29,26 @@ open class AndroidActionExecutor(
             SemanticAction.SEARCH_CONTENT -> handleSearchContent(parsedIntent)
             SemanticAction.LAUNCH_APP -> handleLaunchApp(parsedIntent)
             SemanticAction.UNKNOWN -> handleUnknownAction(parsedIntent)
+        }
+    }
+
+    private fun handlePlayMedia(intentData: ParsedIntent): ActionExecutionResult {
+        val query = intentData.queryOrContent ?: intentData.originalPrompt
+        val encoded = URLEncoder.encode(query, "UTF-8")
+
+        return if (intentData.targetApp == "Spotify") {
+            try {
+                val spotifyIntent = Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:$encoded")).apply {
+                    `package` = "com.spotify.music"
+                }
+                launchIntent(spotifyIntent, "Spotify", "Searching Spotify for '$query'")
+            } catch (e: Exception) {
+                val webUri = Uri.parse("https://open.spotify.com/search/$encoded")
+                launchIntent(Intent(Intent.ACTION_VIEW, webUri), "Spotify Web", "Opened Spotify Web search for '$query'")
+            }
+        } else {
+            val ytMusicUri = Uri.parse("https://music.youtube.com/search?q=$encoded")
+            launchIntent(Intent(Intent.ACTION_VIEW, ytMusicUri), "YouTube Music", "Searching YouTube Music for '$query'")
         }
     }
 
@@ -91,7 +114,6 @@ open class AndroidActionExecutor(
                 ActionExecutionResult(false, "Flashlight", "Flashlight hardware unavailable")
             }
         } catch (e: Exception) {
-            // Fallback: Open Camera if torch mode permission is restricted
             launchIntent(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA), "Camera Flashlight", "Opened Camera for Flashlight control")
         }
     }

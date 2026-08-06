@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nova.runtime.app.ui.components.ActivityStream
 import com.nova.runtime.app.ui.components.CommandBar
+import com.nova.runtime.app.ui.components.FloatingNovaVoiceWidget
 import com.nova.runtime.app.ui.components.SystemHeader
 import com.nova.runtime.app.ui.theme.NovaCyanAccent
 import com.nova.runtime.app.ui.theme.NovaDarkBackground
@@ -69,6 +70,13 @@ fun NovaOsScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = NovaDarkBackground,
+        floatingActionButton = {
+            FloatingNovaVoiceWidget(
+                onVoiceCommandCaptured = { spokenCommand ->
+                    viewModel.submitCommand(spokenCommand)
+                }
+            )
+        },
         bottomBar = {
             Box(modifier = Modifier.padding(16.dp)) {
                 CommandBar(
