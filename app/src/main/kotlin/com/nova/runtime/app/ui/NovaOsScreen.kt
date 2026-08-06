@@ -22,7 +22,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,9 +29,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nova.runtime.app.ui.components.ActivityItem
 import com.nova.runtime.app.ui.components.ActivityStream
 import com.nova.runtime.app.ui.components.CommandBar
-import com.nova.runtime.app.ui.components.FloatingNovaVoiceWidget
 import com.nova.runtime.app.ui.components.SystemHeader
 import com.nova.runtime.app.ui.theme.NovaCyanAccent
 import com.nova.runtime.app.ui.theme.NovaDarkBackground
@@ -40,74 +39,62 @@ import com.nova.runtime.app.ui.theme.NovaSurfaceDark
 import com.nova.runtime.app.ui.theme.NovaSurfaceVariant
 import com.nova.runtime.app.ui.theme.NovaTextPrimary
 import com.nova.runtime.app.ui.theme.NovaTextSecondary
-import com.nova.runtime.models.RuntimeLifecycleState
 
 data class CapabilityModule(
     val title: String,
     val description: String,
-    val isOnline: Boolean
+    val isOnline: Boolean,
 )
 
 @Composable
 fun NovaOsScreen(
     viewModel: NovaOsViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val lifecycleState by viewModel.lifecycleState.collectAsState()
-    val activityFeed by viewModel.activities.collectAsState()
+    val activityFeed by viewModel.activityFeed.collectAsState()
+    val isProcessing by viewModel.isProcessing.collectAsState()
 
-    val modules = remember {
-        listOf(
-            CapabilityModule("Kernel Engine", "Core lifecycle & event bus", true),
-            CapabilityModule("Cognitive Planner", "Task breakdown & routing", true),
-            CapabilityModule("Reasoning Matrix", "Context & decision engine", true),
-            CapabilityModule("Vector Memory", "Short-term & long-term store", true),
-            CapabilityModule("Local Inference", "GGML/ONNX quantized LLM", true),
-            CapabilityModule("Execution System", "Sandboxed action executor", true)
-        )
-    }
+    val modules = listOf(
+        CapabilityModule("Kernel Engine", "Core lifecycle & event bus", true),
+        CapabilityModule("Cognitive Planner", "Task breakdown & routing", true),
+        CapabilityModule("Reasoning Matrix", "Context & decision engine", true),
+        CapabilityModule("Vector Memory", "Short-term & long-term store", true),
+        CapabilityModule("Local Inference", "GGML/ONNX quantized LLM", true),
+        CapabilityModule("Execution System", "Sandboxed action executor", true),
+    )
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = NovaDarkBackground,
-        floatingActionButton = {
-            FloatingNovaVoiceWidget(
-                onVoiceCommandCaptured = { spokenCommand ->
-                    viewModel.submitCommand(spokenCommand)
-                }
-            )
-        },
         bottomBar = {
             Box(modifier = Modifier.padding(16.dp)) {
                 CommandBar(
-                    onCommandSubmit = { command ->
-                        viewModel.submitCommand(command)
-                    }
+                    onCommandSubmit = viewModel::submitCommand,
+                    enabled = !isProcessing,
                 )
             }
-        }
+        },
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 16.dp),
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 1. Top System Telemetry Header
-            SystemHeader(lifecycleState = lifecycleState ?: RuntimeLifecycleState.READY)
+            SystemHeader(lifecycleState = lifecycleState)
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 2. Cognitive Modules Grid
             Text(
-                text = "COGNITIVE RUNTIME MODULES (TAP TO INSPECT)",
+                text = "COGNITIVE RUNTIME MODULES",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = NovaTextSecondary,
                 fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
+                modifier = Modifier.padding(bottom = 8.dp, start = 4.dp),
             )
 
             LazyVerticalGrid(
@@ -115,22 +102,18 @@ fun NovaOsScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(bottom = 8.dp),
-                modifier = Modifier.height(180.dp)
+                modifier = Modifier.height(180.dp),
             ) {
                 items(modules) { module ->
-                    ModuleCard(
-                        module = module,
-                        onCardClick = { viewModel.inspectModule(module.title) }
-                    )
+                    ModuleCard(module = module)
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 3. Live Cognition Event Stream
             ActivityStream(
                 activities = activityFeed,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
         }
     }
@@ -139,28 +122,27 @@ fun NovaOsScreen(
 @Composable
 fun ModuleCard(
     module: CapabilityModule,
-    onCardClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(NovaSurfaceDark)
             .border(1.dp, NovaSurfaceVariant, RoundedCornerShape(12.dp))
-            .clickable { onCardClick() }
-            .padding(10.dp)
+            .clickable { }
+            .padding(10.dp),
     ) {
         Column {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = module.title,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = NovaTextPrimary
+                    color = NovaTextPrimary,
                 )
 
                 Text(
@@ -168,7 +150,7 @@ fun ModuleCard(
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (module.isOnline) NovaCyanAccent else NovaTextSecondary,
-                    fontFamily = FontFamily.Monospace
+                    fontFamily = FontFamily.Monospace,
                 )
             }
 
@@ -178,7 +160,7 @@ fun ModuleCard(
                 text = module.description,
                 fontSize = 10.sp,
                 color = NovaTextSecondary,
-                maxLines = 2
+                maxLines = 2,
             )
         }
     }
