@@ -1,5 +1,7 @@
 package com.nova.runtime.kernel.trace
 
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.ThreadContextElement
 import java.util.UUID
 
 /**
@@ -59,6 +61,36 @@ class TraceContextHolder(
             } else {
                 set(previous)
             }
+        }
+    }
+
+    fun contextElement(context: TraceContext): TraceContextElement =
+        TraceContextElement(context, this)
+}
+
+/**
+ * Coroutine context element that propagates [TraceContext] across suspend boundaries.
+ */
+class TraceContextElement(
+    private val traceContext: TraceContext,
+    private val holder: TraceContextHolder,
+) : ThreadContextElement<TraceContext?> {
+
+    companion object Key : CoroutineContext.Key<TraceContextElement>
+
+    override val key: CoroutineContext.Key<TraceContextElement> = Key
+
+    override fun updateThreadContext(context: CoroutineContext): TraceContext? {
+        val previous = holder.current()
+        holder.set(traceContext)
+        return previous
+    }
+
+    override fun restoreThreadContext(context: CoroutineContext, oldState: TraceContext?) {
+        if (oldState == null) {
+            holder.clear()
+        } else {
+            holder.set(oldState)
         }
     }
 }

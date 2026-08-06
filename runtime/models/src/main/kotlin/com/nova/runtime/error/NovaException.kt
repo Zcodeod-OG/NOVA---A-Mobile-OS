@@ -45,6 +45,15 @@ object NovaErrors {
         diagnostics = "key=$key",
     )
 
+    fun configurationInvalid(key: String, reason: String): NovaError = NovaError(
+        code = "CONFIG_INVALID_VALUE",
+        category = ErrorCategory.CONFIGURATION,
+        severity = ErrorSeverity.ERROR,
+        recoverability = Recoverability.RECOVERABLE,
+        userVisibleMessage = "Invalid configuration for $key: $reason",
+        diagnostics = "key=$key, reason=$reason",
+    )
+
     fun eventHandlerFailed(eventType: String, subscriber: String): NovaError = NovaError(
         code = "EVENT_HANDLER_FAILED",
         category = ErrorCategory.EVENT_BUS,

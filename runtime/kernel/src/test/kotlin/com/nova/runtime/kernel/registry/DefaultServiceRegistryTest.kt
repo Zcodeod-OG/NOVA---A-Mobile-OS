@@ -51,4 +51,12 @@ class DefaultServiceRegistryTest {
         registry.clear()
         assertEquals(0, registry.registeredTypes().size)
     }
+
+    @Test
+    fun register_notifiesRegistrationListeners() {
+        var notified = false
+        registry.addRegistrationListener { _, _ -> notified = true }
+        registry.register(TestService::class, TestService())
+        assertTrue(notified)
+    }
 }

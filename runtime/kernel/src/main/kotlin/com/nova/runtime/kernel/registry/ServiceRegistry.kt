@@ -4,9 +4,14 @@ import com.nova.runtime.error.NovaException
 import com.nova.runtime.error.NovaErrors
 import com.nova.runtime.kernel.api.NovaService
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.reflect.KClass
 
+@Suppress("TooManyFunctions")
 interface ServiceRegistry {
+    fun addRegistrationListener(listener: ServiceRegistrationListener)
+    fun removeRegistrationListener(listener: ServiceRegistrationListener)
+
     fun <T : NovaService> register(serviceType: KClass<T>, instance: T)
     fun <T : NovaService> register(serviceType: Class<T>, instance: T) =
         register(serviceType.kotlin, instance)
@@ -15,7 +20,6 @@ interface ServiceRegistry {
     fun <T : NovaService> get(serviceType: Class<T>): T = get(serviceType.kotlin)
 
     fun <T : NovaService> getOrNull(serviceType: KClass<T>): T?
-    fun getOrNull(serviceType: KClass<out NovaService>): NovaService?
     fun contains(serviceType: KClass<out NovaService>): Boolean
     fun registeredTypes(): Set<KClass<out NovaService>>
     fun clear()
@@ -23,12 +27,22 @@ interface ServiceRegistry {
 
 class DefaultServiceRegistry : ServiceRegistry {
     private val services = ConcurrentHashMap<KClass<out NovaService>, NovaService>()
+    private val listeners = CopyOnWriteArrayList<ServiceRegistrationListener>()
+
+    override fun addRegistrationListener(listener: ServiceRegistrationListener) {
+        listeners.add(listener)
+    }
+
+    override fun removeRegistrationListener(listener: ServiceRegistrationListener) {
+        listeners.remove(listener)
+    }
 
     override fun <T : NovaService> register(serviceType: KClass<T>, instance: T) {
         val previous = services.putIfAbsent(serviceType, instance)
         if (previous != null) {
             throw NovaException(NovaErrors.duplicateService(serviceType.simpleName ?: "Unknown"))
         }
+        listeners.forEach { listener -> listener.onRegistered(serviceType, instance) }
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -41,9 +55,6 @@ class DefaultServiceRegistry : ServiceRegistry {
     @Suppress("UNCHECKED_CAST")
     override fun <T : NovaService> getOrNull(serviceType: KClass<T>): T? =
         services[serviceType] as? T
-
-    override fun getOrNull(serviceType: KClass<out NovaService>): NovaService? =
-        services[serviceType]
 
     override fun contains(serviceType: KClass<out NovaService>): Boolean =
         services.containsKey(serviceType)

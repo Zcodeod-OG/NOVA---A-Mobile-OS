@@ -1,6 +1,6 @@
 package com.nova.runtime.events.conversation
 
-object ConversationEventTypes {
+object ConversationEvents {
     const val STARTED = "ConversationStarted"
     const val OBSERVATION_RECEIVED = "ObservationReceived"
     const val COMPLETED = "ConversationCompleted"

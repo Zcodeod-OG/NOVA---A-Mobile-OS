@@ -79,6 +79,7 @@ class InMemoryEventBus(
         isShutdown.set(true)
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun dispatchEvent(event: RuntimeEvent) {
         val matching = subscribers.values
             .filter { subscriber -> subscriber.eventTypes.isEmpty() || event.eventType in subscriber.eventTypes }
@@ -116,7 +117,7 @@ class InMemoryEventBus(
  * Priority queue helper for async event scheduling (reserved for future worker integration).
  */
 class EventPriorityQueue {
-    private val queue = PriorityBlockingQueue(11) { a, b ->
+    private val queue = PriorityBlockingQueue<RuntimeEvent>(11) { a, b ->
         a.priority.ordinal.compareTo(b.priority.ordinal)
     }
 
