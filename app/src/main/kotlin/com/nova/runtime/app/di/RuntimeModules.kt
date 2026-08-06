@@ -11,7 +11,7 @@ import com.nova.runtime.conversation.ConversationServiceStub
 import com.nova.runtime.execution.ExecutionRuntime
 import com.nova.runtime.execution.ExecutionRuntimeStub
 import com.nova.runtime.inference.AdaptiveInferenceEngine
-import com.nova.runtime.inference.AdaptiveInferenceEngineStub
+import com.nova.runtime.inference.OnnxInferenceEngine
 import com.nova.runtime.events.InMemoryEventBus
 import com.nova.runtime.kernel.RuntimeKernel
 import com.nova.runtime.kernel.di.kernelModule
@@ -33,7 +33,7 @@ import org.koin.dsl.module
 
 /** Sprint 0 service stubs wired alongside Sprint 1 kernel infrastructure. */
 val sprint0StubsModule = module {
-    single<AdaptiveInferenceEngine> { AdaptiveInferenceEngineStub() }
+    single<AdaptiveInferenceEngine> { OnnxInferenceEngine() }
     single<SemanticUnderstandingPipeline> { SemanticUnderstandingPipelineStub(get()) }
     single<StorageCoordinator> { StorageCoordinatorStub() }
     single<MemoryPlatform> { MemoryPlatformStub(get()) }

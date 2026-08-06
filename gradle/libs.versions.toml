@@ -16,6 +16,7 @@ junit = "4.13.2"
 junit-jupiter = "5.11.3"
 androidx-test-ext = "1.2.1"
 espresso = "3.6.1"
+onnxruntime = "1.19.2"
 
 [libraries]
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
@@ -40,6 +41,8 @@ androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+
+onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntime" }
 
 junit = { module = "junit:junit", version.ref = "junit" }
 junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit-jupiter" }
