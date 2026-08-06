@@ -83,16 +83,16 @@ class StorageCoordinatorImpl(
         val query = filter["query"].orEmpty()
         return when (collection) {
             StorageCollections.DOCUMENTS ->
-                documentRepository.search(query).map(documentToMap)
+                documentRepository.search(query).map { documentToMap(it) }
             StorageCollections.PHOTOS ->
-                photoRepository.search(query).map(photoToMap)
+                photoRepository.search(query).map { photoToMap(it) }
             StorageCollections.CONTACTS ->
-                contactRepository.search(query).map(contactToMap)
+                contactRepository.search(query).map { contactToMap(it) }
             StorageCollections.PROJECTS ->
-                projectRepository.search(query).map(projectToMap)
+                projectRepository.search(query).map { projectToMap(it) }
             StorageCollections.SESSIONS ->
                 filter["traceId"]?.let { traceId ->
-                    sessionRepository.getByTraceId(UUID.fromString(traceId)).map(sessionToMap)
+                    sessionRepository.getByTraceId(UUID.fromString(traceId)).map { sessionToMap(it) }
                 } ?: emptyList()
             StorageCollections.PREFERENCES ->
                 preferenceRepository.getByKey(filter["key"] ?: query)?.let { listOf(preferenceToMap(it)) }
@@ -138,17 +138,17 @@ class StorageCoordinatorImpl(
         val id = runCatching { UUID.fromString(key) }.getOrNull()
         val result =
             when (collection) {
-                StorageCollections.DOCUMENTS -> id?.let { documentRepository.getById(it) }?.let(documentToMap)
-                StorageCollections.PHOTOS -> id?.let { photoRepository.getById(it) }?.let(photoToMap)
-                StorageCollections.CONTACTS -> id?.let { contactRepository.getById(it) }?.let(contactToMap)
-                StorageCollections.PROJECTS -> id?.let { projectRepository.getById(it) }?.let(projectToMap)
-                StorageCollections.SESSIONS -> id?.let { sessionRepository.getById(it) }?.let(sessionToMap)
+                StorageCollections.DOCUMENTS -> id?.let { documentRepository.getById(it) }?.let { documentToMap(it) }
+                StorageCollections.PHOTOS -> id?.let { photoRepository.getById(it) }?.let { photoToMap(it) }
+                StorageCollections.CONTACTS -> id?.let { contactRepository.getById(it) }?.let { contactToMap(it) }
+                StorageCollections.PROJECTS -> id?.let { projectRepository.getById(it) }?.let { projectToMap(it) }
+                StorageCollections.SESSIONS -> id?.let { sessionRepository.getById(it) }?.let { sessionToMap(it) }
                 StorageCollections.PREFERENCES ->
-                    preferenceRepository.getByKey(key)?.let(preferenceToMap)
+                    preferenceRepository.getByKey(key)?.let { preferenceToMap(it) }
                 StorageCollections.EXECUTION_HISTORY ->
-                    id?.let { executionHistoryRepository.getById(it) }?.let(executionToMap)
+                    id?.let { executionHistoryRepository.getById(it) }?.let { executionToMap(it) }
                 StorageCollections.EMBEDDINGS ->
-                    id?.let { embeddingRepository.getById(it) }?.let(embeddingToMap)
+                    id?.let { embeddingRepository.getById(it) }?.let { embeddingToMap(it) }
                 else -> null
             }
         if (result != null) {

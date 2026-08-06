@@ -1,5 +1,6 @@
 package com.nova.runtime.android.capability.provider
 
+import android.content.Context
 import com.nova.runtime.android.AndroidAdapterLayerImpl
 import com.nova.runtime.android.accessibilityAdapter.AccessibilityAdapterStub
 import com.nova.runtime.android.alarmAdapter.AlarmAdapterStub
@@ -28,7 +29,7 @@ import androidx.test.core.app.ApplicationProvider
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class AndroidCapabilityProviderTest {
-    private val context = ApplicationProvider.getApplicationContext()
+    private val context: Context = ApplicationProvider.getApplicationContext()
     private val logger = StructuredLogger()
     private val traceId = UUID.randomUUID()
     private val adapters =

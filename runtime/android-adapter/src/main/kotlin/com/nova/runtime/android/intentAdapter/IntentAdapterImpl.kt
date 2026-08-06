@@ -148,7 +148,21 @@ class IntentAdapterStub : IntentAdapter {
         operation: String,
         parameters: Map<String, String>,
         traceId: UUID,
-    ): CapabilityResult = CapabilityResult.Success(mapOf("stub" to "true", "operation" to operation))
+    ): CapabilityResult =
+        CapabilityResult.Success(
+            buildMap {
+                put("stub", "true")
+                put("operation", operation)
+                when (operation) {
+                    IntentOperations.SHARE -> {
+                        put("status", "shared")
+                        parameters["packageName"]?.let { put("packageName", it) }
+                    }
+                    IntentOperations.LAUNCH_SETTINGS -> put("status", "launched")
+                    else -> Unit
+                }
+            },
+        )
 
     override fun supportedOperations(): Set<String> = IntentOperations.run {
         setOf(OPEN_APP, SHARE, VIEW_DOCUMENT, DIAL, LAUNCH_SETTINGS, OPEN_URL)

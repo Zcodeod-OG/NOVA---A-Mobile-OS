@@ -1,36 +1,42 @@
 package com.nova.runtime.storage.migrations
 
-import android.content.Context
-import androidx.room.testing.MigrationTestHelper
+import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
-import androidx.test.core.app.ApplicationProvider
-import androidx.test.platform.app.InstrumentationRegistry
-import com.nova.runtime.storage.database.NovaDatabase
+import com.nova.runtime.storage.StorageRobolectricTest
 import org.junit.Assert.assertTrue
-import org.junit.Rule
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
-class MigrationTest {
-    private val context: Context = ApplicationProvider.getApplicationContext()
-
-    @get:Rule
-    val helper: MigrationTestHelper =
-        MigrationTestHelper(
-            InstrumentationRegistry.getInstrumentation(),
-            NovaDatabase::class.java,
-            emptyList(),
-            FrameworkSQLiteOpenHelperFactory(),
-        )
+class MigrationTest : StorageRobolectricTest() {
 
     @Test
     fun migrate1To2_addsMvpTables() {
-        helper.createDatabase(TEST_DB, StorageMigrations.VERSION_1).apply {
-            execSQL(
+        val helper =
+            FrameworkSQLiteOpenHelperFactory().create(
+                SupportSQLiteOpenHelper.Configuration.builder(context)
+                    .name("migration_test.db")
+                    .callback(V1SchemaCallback())
+                    .build(),
+            )
+        val db = helper.writableDatabase
+        try {
+            Migration_1_2.migrate(db)
+
+            assertTrue(
+                db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='photos'").moveToFirst(),
+            )
+            assertTrue(
+                db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='embeddings'").moveToFirst(),
+            )
+        } finally {
+            db.close()
+            helper.close()
+        }
+    }
+
+    private class V1SchemaCallback : SupportSQLiteOpenHelper.Callback(1) {
+        override fun onCreate(db: SupportSQLiteDatabase) {
+            db.execSQL(
                 """
                 CREATE TABLE IF NOT EXISTS documents (
                     id TEXT NOT NULL PRIMARY KEY,
@@ -49,23 +55,12 @@ class MigrationTest {
                 )
                 """.trimIndent(),
             )
-            close()
         }
 
-        helper.runMigrationsAndValidate(
-            TEST_DB,
-            StorageMigrations.VERSION_2,
-            true,
-            Migration_1_2,
-        )
-
-        val db = helper.openDatabase(TEST_DB)
-        assertTrue(db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='photos'").moveToFirst())
-        assertTrue(db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='embeddings'").moveToFirst())
-        db.close()
-    }
-
-    private companion object {
-        const val TEST_DB = "migration-test"
+        override fun onUpgrade(
+            db: SupportSQLiteDatabase,
+            oldVersion: Int,
+            newVersion: Int,
+        ) = Unit
     }
 }

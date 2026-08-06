@@ -19,6 +19,7 @@ class NovaApplication : Application() {
         super.onCreate()
         startKoin {
             androidContext(this@NovaApplication)
+            allowOverride(true)
             modules(
                 runtimeModule,
                 storageModule(this@NovaApplication),

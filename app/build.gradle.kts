@@ -54,6 +54,7 @@ dependencies {
     implementation(project(":runtime:policy"))
     implementation(project(":runtime:capability"))
     implementation(project(":runtime:android-adapter"))
+    implementation(project(":runtime:ai-core"))
     implementation(project(":runtime:ai-native"))
     implementation(project(":runtime:storage"))
     implementation(project(":runtime:orchestrator"))
@@ -72,7 +73,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.koin.android)
-    implementation("io.insert-koin:koin-androidx-viewmodel:${libs.versions.koin.get()}")
+    implementation(libs.koin.androidx.compose)
     implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)

@@ -22,9 +22,14 @@ class OnnxSessionManager(
     private val moduleTag: String = "ONNX",
 ) : AutoCloseable {
     private val mutex = Mutex()
-    private val environment = OrtEnvironment.getEnvironment()
+    private val environmentRef = AtomicReference<OrtEnvironment?>(null)
     private val sessionRef = AtomicReference<OrtSession?>(null)
     private var loadedPath: String? = null
+
+    private fun environment(): OrtEnvironment =
+        environmentRef.get() ?: synchronized(this) {
+            environmentRef.get() ?: OrtEnvironment.getEnvironment().also { environmentRef.set(it) }
+        }
 
     val isLoaded: Boolean get() = sessionRef.get() != null
 
@@ -38,7 +43,7 @@ class OnnxSessionManager(
         }
 
         return runCatching {
-            val session = environment.createSession(path, OrtSession.SessionOptions())
+            val session = environment().createSession(path, OrtSession.SessionOptions())
             sessionRef.set(session)
             loadedPath = path
             logger.info(moduleTag, "Loaded ONNX model $fileName from $path")

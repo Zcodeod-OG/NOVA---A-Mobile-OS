@@ -36,7 +36,7 @@ val androidAdapterModule = module {
     single<CalendarAdapter> { CalendarAdapterImpl(androidContext(), get()) }
     single<AlarmAdapter> { AlarmAdapterImpl(androidContext(), get()) }
     single<MediaStoreAdapter> { MediaStoreAdapterImpl(androidContext(), get()) }
-    single<MediaStoreQueryPort>(override = true) { MediaStoreQueryPortImpl(get()) }
+    single<MediaStoreQueryPort> { MediaStoreQueryPortImpl(get()) }
     single<NotificationAdapter> { NotificationAdapterImpl(androidContext(), get()) }
     single<AccessibilityAdapter> { AccessibilityAdapterImpl(get(), get()) }
     single<StorageAccessAdapter> { StorageAccessAdapterImpl(androidContext(), get()) }
@@ -63,7 +63,7 @@ internal fun androidAdapterTestModule(logger: NovaLogger) = module {
     single<CalendarAdapter> { CalendarAdapterImpl(androidContext(), logger) }
     single<AlarmAdapter> { AlarmAdapterImpl(androidContext(), logger) }
     single<MediaStoreAdapter> { MediaStoreAdapterImpl(androidContext(), logger) }
-    single<MediaStoreQueryPort>(override = true) { MediaStoreQueryPortImpl(get()) }
+    single<MediaStoreQueryPort> { MediaStoreQueryPortImpl(get()) }
     single<NotificationAdapter> { NotificationAdapterImpl(androidContext(), logger) }
     single<AccessibilityAdapter> { AccessibilityAdapterImpl(get(), logger) }
     single<StorageAccessAdapter> { StorageAccessAdapterImpl(androidContext(), logger) }

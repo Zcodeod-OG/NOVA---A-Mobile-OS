@@ -10,7 +10,7 @@ import com.nova.runtime.models.ErrorSeverity
 import com.nova.runtime.models.RuntimeError
 import com.nova.runtime.storage.search.SearchRequest
 
-internal abstract class AbstractSearchCapabilityProvider(
+abstract class AbstractSearchCapabilityProvider(
     override val providerId: String,
     override val capabilityType: String,
     override val version: String,

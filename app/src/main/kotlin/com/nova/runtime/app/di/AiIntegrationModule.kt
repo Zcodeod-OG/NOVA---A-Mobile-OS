@@ -10,7 +10,7 @@ import org.koin.dsl.module
 val aiIntegrationModule = module {
     includes(aiNativeModule, searchModule)
 
-    single<OcrAdapter>(override = true) {
+    single<OcrAdapter> {
         OcrAdapterImpl(get())
     }
 }

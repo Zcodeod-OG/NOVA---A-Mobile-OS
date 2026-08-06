@@ -56,6 +56,7 @@ class IntentAdapterImplTest : AndroidAdapterRobolectricTest() {
     }
 
     @Test
+    fun execute_dial_withoutPhoneNumber_returnsValidationFailure() = runTest {
         val result = adapter.execute(IntentOperations.DIAL, emptyMap(), traceId)
         assertTrue(result is CapabilityResult.Failure)
         val failure = result as CapabilityResult.Failure

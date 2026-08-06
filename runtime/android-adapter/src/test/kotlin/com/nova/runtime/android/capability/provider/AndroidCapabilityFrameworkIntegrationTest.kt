@@ -1,5 +1,6 @@
 package com.nova.runtime.android.capability.provider
 
+import android.content.Context
 import com.nova.runtime.android.AndroidAdapterLayerImpl
 import com.nova.runtime.android.accessibilityAdapter.AccessibilityAdapterStub
 import com.nova.runtime.android.alarmAdapter.AlarmAdapterStub
@@ -26,18 +27,28 @@ import java.util.UUID
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowApplication
 import androidx.test.core.app.ApplicationProvider
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class AndroidCapabilityFrameworkIntegrationTest {
-    private val context = ApplicationProvider.getApplicationContext()
+    private val context: Context = ApplicationProvider.getApplicationContext()
     private val logger = StructuredLogger()
     private val eventBus = InMemoryEventBus(logger)
+
+    @Before
+    fun grantTestPermissions() {
+        ShadowApplication.getInstance().grantPermissions(
+            android.Manifest.permission.READ_CONTACTS,
+        )
+    }
+
     private val adapters =
         AndroidAdapterLayerImpl(
             intents = IntentAdapterStub(),

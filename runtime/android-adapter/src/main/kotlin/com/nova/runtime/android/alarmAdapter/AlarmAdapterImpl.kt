@@ -113,7 +113,16 @@ class AlarmAdapterStub : AlarmAdapter {
         operation: String,
         parameters: Map<String, String>,
         traceId: UUID,
-    ): CapabilityResult = CapabilityResult.Success(mapOf("stub" to "true", "operation" to operation))
+    ): CapabilityResult =
+        CapabilityResult.Success(
+            buildMap {
+                put("stub", "true")
+                put("operation", operation)
+                parameters["requestCode"]?.let { put("requestCode", it) }
+                parameters["triggerAtMillis"]?.let { put("triggerAtMillis", it) }
+                if (operation == AlarmOperations.CREATE) put("status", "scheduled")
+            },
+        )
 
     override fun supportedOperations(): Set<String> =
         setOf(AlarmOperations.CREATE, AlarmOperations.CANCEL, AlarmOperations.UPDATE)

@@ -22,7 +22,7 @@ val aiNativeModule = module {
     single<ModelLoader> { AndroidModelLoader(androidContext()) }
 
     single { CosineVectorIndex() }
-    single<VectorIndex>(override = true) { get<CosineVectorIndex>() }
+    single<VectorIndex> { get<CosineVectorIndex>() }
 
     single<EmbeddingGenerator> {
         OnnxEmbeddingGenerator(
@@ -32,13 +32,13 @@ val aiNativeModule = module {
     }
 
     single { WhisperOnnxAsrEngine(modelLoader = get(), logger = get()) }
-    single<SpeechRecognizer>(override = true) {
+    single<SpeechRecognizer> {
         WhisperSpeechRecognizer(asrEngine = get())
     }
 
     single<OcrEngine> { MlKitOcrEngine() }
 
-    single<ModelRegistry>(override = true) {
+    single<ModelRegistry> {
         OnDeviceModelRegistryFactory(
             modelLoader = get(),
             logger = get(),

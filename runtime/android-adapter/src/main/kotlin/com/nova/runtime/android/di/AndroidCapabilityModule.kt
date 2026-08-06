@@ -18,7 +18,7 @@ val androidCapabilityModule = module {
             logger = get<NovaLogger>(),
         )
     }
-    single<CapabilityRegistry>(override = true) {
+    single<CapabilityRegistry> {
         DefaultCapabilityRegistry(initialProviders = get())
     }
 }

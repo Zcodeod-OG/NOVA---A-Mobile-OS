@@ -17,7 +17,7 @@ import com.nova.runtime.utils.logging.NovaLogger
  * Runs a single forward pass and decodes logits/text output; falls back to delegate when model absent.
  */
 class OnnxGenerativeInferenceModel(
-    private val tier: InferenceTier,
+    override val tier: InferenceTier,
     override val modelId: String,
     private val modelFileName: String,
     private val modelLoader: ModelLoader,

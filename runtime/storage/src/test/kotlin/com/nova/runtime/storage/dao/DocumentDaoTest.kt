@@ -2,6 +2,7 @@ package com.nova.runtime.storage.dao
 
 import com.nova.runtime.storage.StorageRobolectricTest
 import com.nova.runtime.storage.entities.DocumentEntity
+import com.nova.runtime.storage.entities.EmbeddingEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -83,7 +84,18 @@ class DocumentDaoTest : StorageRobolectricTest() {
     fun listUnindexed_returnsDocumentsWithoutEmbedding() =
         runTest {
             val unindexed = sampleDocument(name = "pending")
-            val indexed = sampleDocument(name = "done").copy(embeddingId = UUID.randomUUID())
+            val embeddingId = UUID.randomUUID()
+            val indexed = sampleDocument(name = "done").copy(embeddingId = embeddingId)
+            database.embeddingDao().insert(
+                EmbeddingEntity(
+                    embeddingId = embeddingId,
+                    objectType = "document",
+                    objectId = indexed.id,
+                    modelVersion = "test-v1",
+                    dimension = 384,
+                    createdAt = 1L,
+                ),
+            )
             documentDao.insert(unindexed)
             documentDao.insert(indexed)
 

@@ -41,11 +41,11 @@ class DocumentRepositoryTest {
             assertEquals(listOf(document), results)
         }
 
-    private fun sampleDocument(): DocumentEntity =
+    private fun sampleDocument(name: String = "Budget"): DocumentEntity =
         DocumentEntity(
             id = UUID.randomUUID(),
             path = "/docs/budget.pdf",
-            name = "Budget",
+            name = name,
             extension = "pdf",
             mimeType = "application/pdf",
             size = 2048L,

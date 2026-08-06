@@ -14,6 +14,7 @@ import com.nova.runtime.android.mediaStoreAdapter.MediaStoreAdapter
 import com.nova.runtime.android.mediaStoreAdapter.MediaStoreAdapterStub
 import com.nova.runtime.android.notificationAdapter.NotificationAdapter
 import com.nova.runtime.android.notificationAdapter.NotificationAdapterStub
+import com.nova.runtime.android.ocrAdapter.OcrAdapter
 import com.nova.runtime.android.ocrAdapter.OcrAdapterStub
 import com.nova.runtime.android.storageAccessAdapter.StorageAccessAdapter
 import com.nova.runtime.android.storageAccessAdapter.StorageAccessAdapterStub
