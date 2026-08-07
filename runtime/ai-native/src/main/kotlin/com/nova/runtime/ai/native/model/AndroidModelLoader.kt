@@ -22,19 +22,19 @@ class AndroidModelLoader(
         get() = File(config.modelsDirectory).also { it.mkdirs() }
 
     override suspend fun resolvePath(fileName: String): String? = withContext(Dispatchers.IO) {
-        val target = File(modelsDir, fileName)
-        if (target.isFile) {
-            return@withContext target.absolutePath
+        localModelFile(fileName)?.absolutePath ?: run {
+            if (config.copyFromAssetsOnFirstLaunch) {
+                copyAssetIfPresent(fileName, localModelFile(fileName) ?: File(modelsDir, fileName))
+            }
+            localModelFile(fileName)?.absolutePath
         }
-        if (config.copyFromAssetsOnFirstLaunch) {
-            copyAssetIfPresent(fileName, target)
-        }
-        target.absolutePath.takeIf { target.isFile }
     }
 
-    override suspend fun isAvailable(fileName: String): Boolean = resolvePath(fileName) != null
+    override suspend fun isAvailable(fileName: String): Boolean = withContext(Dispatchers.IO) {
+        localModelFile(fileName) != null
+    }
 
-    override suspend fun availabilityReport(): List<ModelAvailability> =
+    override suspend fun availabilityReport(): List<ModelAvailability> = withContext(Dispatchers.IO) {
         ModelAssetPaths.ALL_REQUIRED.map { fileName ->
             val target = File(modelsDir, fileName)
             ModelAvailability(
@@ -44,21 +44,27 @@ class AndroidModelLoader(
                 sizeBytes = if (target.isFile) target.length() else 0L,
             )
         }
+    }
 
     override suspend fun ensureModelsFromAssets(fileNames: List<String>): List<ModelAvailability> =
         withContext(Dispatchers.IO) {
             fileNames.forEach { fileName ->
-                val target = File(modelsDir, fileName)
-                if (!target.isFile) {
-                    copyAssetIfPresent(fileName, target)
+                if (localModelFile(fileName) == null) {
+                    copyAssetIfPresent(fileName, File(modelsDir, fileName))
                 }
             }
             availabilityReport().filter { it.fileName in fileNames }
         }
 
+    private fun localModelFile(fileName: String): File? {
+        val target = File(modelsDir, fileName)
+        return target.takeIf { it.isFile }
+    }
+
     private fun copyAssetIfPresent(fileName: String, target: File) {
         runCatching {
             context.assets.open("models/$fileName").use { input ->
+                target.parentFile?.mkdirs()
                 target.outputStream().use { output -> input.copyTo(output) }
             }
         }

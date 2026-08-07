@@ -8,8 +8,10 @@ import com.nova.runtime.ai.model.ModelLoader
 import com.nova.runtime.utils.logging.NovaLogger
 import java.nio.LongBuffer
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Lazy ONNX Runtime session manager with thread-safe init and explicit close.
@@ -43,11 +45,13 @@ class OnnxSessionManager(
         }
 
         return runCatching {
-            val session = environment().createSession(path, OrtSession.SessionOptions())
-            sessionRef.set(session)
-            loadedPath = path
-            logger.info(moduleTag, "Loaded ONNX model $fileName from $path")
-            session
+            withContext(Dispatchers.IO) {
+                environment().createSession(path, OrtSession.SessionOptions())
+            }.also { session ->
+                sessionRef.set(session)
+                loadedPath = path
+                logger.info(moduleTag, "Loaded ONNX model $fileName from $path")
+            }
         }.getOrElse { error ->
             logger.warn(moduleTag, "Failed to load ONNX model $fileName: ${error.message}")
             null

@@ -65,8 +65,26 @@ class PlaceholderIntentClassifier : IntentClassifier {
         private const val FALLBACK_CONFIDENCE = 0.55
 
         private val INTENT_PATTERNS = listOf(
+            IntentPattern("send_document_whatsapp") { payload ->
+                "whatsapp" in payload &&
+                    (
+                        (
+                            listOf("send", "share").any { it in payload } &&
+                                listOf("document", "documents", "doc", "docs", "pdf", "file", "report", "invoice")
+                                    .any { it in payload }
+                        ) ||
+                            (
+                                listOf("find", "search").any { it in payload } &&
+                                    listOf("document", "documents", "doc", "docs", "pdf", "file", "report", "invoice")
+                                        .any { it in payload }
+                            )
+                    )
+            },
             IntentPattern("send_whatsapp_message") { payload ->
-                "whatsapp" in payload && listOf("message", "send", "text", "saying").any { it in payload }
+                "whatsapp" in payload &&
+                    listOf("message", "send", "text", "saying", "share").any { it in payload } &&
+                    listOf("document", "documents", "doc", "docs", "pdf", "file", "report", "invoice")
+                        .none { it in payload }
             },
             IntentPattern("semantic_search") { payload ->
                 "semantic" in payload && listOf("search", "find", "query").any { it in payload }

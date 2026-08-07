@@ -16,33 +16,36 @@ object CapabilityOperationAliases {
 
     fun variants(capabilityType: String, operation: String): List<LookupKey> {
         val qualified = "$capabilityType.$operation"
-        val keys = linkedSetOf(LookupKey(capabilityType, operation))
+        val pipelineKey = LookupKey(capabilityType, operation)
+        val androidKeys = mutableListOf<LookupKey>()
+        val extraKeys = mutableListOf<LookupKey>()
 
         when (qualified) {
             NovaCapabilityOperations.WHATSAPP_SEND_MESSAGE ->
-                keys.add(LookupKey("communication", NovaCapabilityOperations.WHATSAPP_SEND_MESSAGE))
+                androidKeys += LookupKey("communication", NovaCapabilityOperations.WHATSAPP_SEND_MESSAGE)
             NovaCapabilityOperations.CONTACTS_SEARCH ->
-                keys.add(LookupKey("communication", NovaCapabilityOperations.CONTACTS_SEARCH))
+                androidKeys += LookupKey("communication", NovaCapabilityOperations.CONTACTS_SEARCH)
             NovaCapabilityOperations.ALARM_CREATE ->
-                keys.add(LookupKey("time", NovaCapabilityOperations.ALARM_CREATE))
+                androidKeys += LookupKey("time", NovaCapabilityOperations.ALARM_CREATE)
             NovaCapabilityOperations.CALENDAR_CREATE ->
-                keys.add(LookupKey("time", NovaCapabilityOperations.CALENDAR_CREATE))
+                androidKeys += LookupKey("time", NovaCapabilityOperations.CALENDAR_CREATE)
             NovaCapabilityOperations.SHARE_FILE ->
-                keys.add(LookupKey("media", NovaCapabilityOperations.SHARE_FILE))
+                androidKeys += LookupKey("media", NovaCapabilityOperations.SHARE_FILE)
             NovaCapabilityOperations.SEARCH_PHOTOS ->
-                keys.add(LookupKey("search.photos", "search"))
+                androidKeys += LookupKey("search.photos", "search")
             NovaCapabilityOperations.SEARCH_DOCUMENTS ->
-                keys.add(LookupKey("search.documents", "search"))
+                androidKeys += LookupKey("search.documents", "search")
             NovaCapabilityOperations.SEARCH_SEMANTIC ->
-                keys.add(LookupKey("search.semantic", "search"))
+                androidKeys += LookupKey("search.semantic", "search")
         }
 
         if (operation.contains('.')) {
-            keys.add(LookupKey(capabilityType, operation))
+            extraKeys += LookupKey(capabilityType, operation)
         } else if (qualified != operation) {
-            keys.add(LookupKey(capabilityType, qualified))
+            extraKeys += LookupKey(capabilityType, qualified)
         }
 
-        return keys.toList()
+        // Prefer Android-mapped keys first so real providers beat overlapping stubs.
+        return (androidKeys + extraKeys + listOf(pipelineKey)).distinct()
     }
 }

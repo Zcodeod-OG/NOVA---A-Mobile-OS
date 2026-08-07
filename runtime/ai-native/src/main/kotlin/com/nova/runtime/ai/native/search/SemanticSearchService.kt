@@ -2,6 +2,7 @@ package com.nova.runtime.ai.native.search
 
 import com.nova.runtime.ai.model.EmbeddingGenerator
 import com.nova.runtime.ai.model.EmbeddingResult
+import com.nova.runtime.ai.native.ingestion.MediaStoreIngestionService
 import com.nova.runtime.ai.native.storage.CosineVectorIndex
 import com.nova.runtime.models.RuntimeModule
 import com.nova.runtime.storage.repository.DocumentRepository
@@ -21,6 +22,7 @@ class SemanticSearchService(
     private val photoRepository: PhotoRepository,
     private val documentRepository: DocumentRepository,
     private val searchIndexPipeline: SearchIndexPipeline,
+    private val mediaStoreIngestionService: MediaStoreIngestionService,
     private val logger: NovaLogger,
 ) {
     suspend fun search(
@@ -33,6 +35,7 @@ class SemanticSearchService(
 
         val latencyMs = measureTimeMillis {
             if (request.indexOnQuery) {
+                mediaStoreIngestionService.ensureSynced()
                 searchIndexPipeline.ensureIndexed(
                     SearchIndexPipeline.IndexRequest(
                         indexPhotos = OBJECT_TYPE_PHOTO in objectTypes,

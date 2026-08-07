@@ -1,5 +1,8 @@
 package com.nova.runtime.app.ui
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,14 +25,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.nova.runtime.app.ui.components.ActivityItem
 import com.nova.runtime.app.ui.components.ActivityStream
 import com.nova.runtime.app.ui.components.CommandBar
 import com.nova.runtime.app.ui.components.SystemHeader
@@ -39,6 +44,7 @@ import com.nova.runtime.app.ui.theme.NovaSurfaceDark
 import com.nova.runtime.app.ui.theme.NovaSurfaceVariant
 import com.nova.runtime.app.ui.theme.NovaTextPrimary
 import com.nova.runtime.app.ui.theme.NovaTextSecondary
+import com.nova.runtime.app.voice.VoiceCaptureController
 
 data class CapabilityModule(
     val title: String,
@@ -54,6 +60,35 @@ fun NovaOsScreen(
     val lifecycleState by viewModel.lifecycleState.collectAsState()
     val activityFeed by viewModel.activityFeed.collectAsState()
     val isProcessing by viewModel.isProcessing.collectAsState()
+    val isRecordingVoice by viewModel.isRecordingVoice.collectAsState()
+    val voiceStatusMessage by viewModel.voiceStatusMessage.collectAsState()
+    val whisperAvailable by viewModel.whisperAvailable.collectAsState()
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val voiceCapture = remember(scope, viewModel) {
+        VoiceCaptureController(context, scope, viewModel)
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            voiceCapture.onPermissionGranted(whisperAvailable)
+        } else {
+            viewModel.reportVoiceError("Microphone permission denied.")
+        }
+    }
+
+    fun toggleVoiceRecording() {
+        voiceCapture.toggle(
+            whisperAvailable = whisperAvailable,
+            isProcessing = isProcessing,
+            isRecordingVoice = isRecordingVoice,
+            hasRecordAudioPermission = VoiceCaptureController.hasRecordAudioPermission(context),
+            requestRecordAudioPermission = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+        )
+    }
 
     val modules = listOf(
         CapabilityModule("Kernel Engine", "Core lifecycle & event bus", true),
@@ -71,7 +106,10 @@ fun NovaOsScreen(
             Box(modifier = Modifier.padding(16.dp)) {
                 CommandBar(
                     onCommandSubmit = viewModel::submitCommand,
+                    onMicToggle = ::toggleVoiceRecording,
                     enabled = !isProcessing,
+                    isRecording = isRecordingVoice,
+                    voiceStatusMessage = voiceStatusMessage,
                 )
             }
         },

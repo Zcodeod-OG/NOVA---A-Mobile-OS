@@ -40,6 +40,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.junit.jupiter.engine)
+    testRuntimeOnly("org.junit.vintage:junit-vintage-engine:${libs.versions.junit.jupiter.get()}")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.test:core:1.6.1")
 }

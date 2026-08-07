@@ -46,8 +46,9 @@ class AndroidCommunicationProvider(
         if (request.operation == CapabilityOperations.WHATSAPP_SEND_MESSAGE) {
             val message = request.parameters["message"] ?: request.parameters["text"]
             val phoneNumber = request.parameters["phoneNumber"]
-            if (message.isNullOrBlank() && phoneNumber.isNullOrBlank()) {
-                return invalidParameters("message or phoneNumber is required for WhatsApp send")
+            val uri = request.parameters["uri"]
+            if (message.isNullOrBlank() && phoneNumber.isNullOrBlank() && uri.isNullOrBlank()) {
+                return invalidParameters("message, phoneNumber, or uri is required for WhatsApp send")
             }
         }
         return CapabilityValidationResult.Valid
@@ -68,8 +69,36 @@ class AndroidCommunicationProvider(
         parameters: Map<String, String>,
         traceId: UUID,
     ): CapabilityResult {
-        val message = parameters["message"] ?: parameters["text"] ?: ""
-        val phoneNumber = parameters["phoneNumber"]?.filter { it.isDigit() }
+        val message = parameters["message"]
+            ?: parameters["text"]
+            ?: parameters["query"]
+            ?: ""
+        val uri = parameters["uri"]
+        val mimeType = parameters["mimeType"] ?: "*/*"
+        var phoneNumber = parameters["phoneNumber"]?.filter { it.isDigit() }
+
+        if (phoneNumber.isNullOrBlank()) {
+            val recipient = parameters["recipient"] ?: parameters["name"]
+            if (!recipient.isNullOrBlank()) {
+                phoneNumber = resolvePhoneNumberForContact(recipient, traceId)
+            }
+        }
+
+        if (!uri.isNullOrBlank()) {
+            return adapters.intents.execute(
+                operation = IntentOperations.SHARE,
+                parameters = buildMap {
+                    put("uri", uri)
+                    put("mimeType", mimeType)
+                    put("packageName", WHATSAPP_PACKAGE)
+                    when {
+                        message.isNotBlank() -> put("text", message)
+                        !phoneNumber.isNullOrBlank() -> put("text", "Shared via NOVA")
+                    }
+                },
+                traceId = traceId,
+            )
+        }
 
         return if (!phoneNumber.isNullOrBlank()) {
             val encodedText = URLEncoder.encode(message, StandardCharsets.UTF_8)
@@ -92,6 +121,29 @@ class AndroidCommunicationProvider(
                 },
                 traceId = traceId,
             )
+        }
+    }
+
+    private suspend fun resolvePhoneNumberForContact(name: String, traceId: UUID): String? {
+        val searchResult = searchContacts(mapOf("query" to name, "name" to name), traceId)
+        if (searchResult !is CapabilityResult.Success) return null
+
+        val contacts = searchResult.output["contacts"].orEmpty()
+        if (contacts.isBlank()) return null
+
+        val contactId = contacts.split("|").firstOrNull()?.substringBefore(":")?.toLongOrNull()
+            ?: return null
+
+        return when (
+            val retrieve = adapters.contacts.execute(
+                operation = ContactsOperations.RETRIEVE,
+                parameters = mapOf("contactId" to contactId.toString()),
+                traceId = traceId,
+            )
+        ) {
+            is CapabilityResult.Success ->
+                retrieve.output["phoneNumber"]?.filter { char -> char.isDigit() }
+            else -> null
         }
     }
 

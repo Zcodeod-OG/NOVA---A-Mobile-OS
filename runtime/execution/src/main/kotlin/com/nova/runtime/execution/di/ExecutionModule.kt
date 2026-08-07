@@ -19,7 +19,8 @@ import com.nova.runtime.execution.rollback.DefaultRollbackManager
 import com.nova.runtime.execution.rollback.RollbackManager
 import com.nova.runtime.execution.scheduler.DefaultDependencyResolver
 import com.nova.runtime.execution.scheduler.DependencyResolver
-import com.nova.runtime.execution.worker.StubCapabilityActionExecutor
+import com.nova.runtime.execution.worker.ActionExecutor
+import com.nova.runtime.execution.worker.ChainingCapabilityActionExecutor
 import com.nova.runtime.models.contracts.ActionPolicyGate
 import org.koin.dsl.module
 
@@ -39,7 +40,7 @@ val executionModule = module {
     single { ExecutionConfig() }
     single<ExecutionHistoryRecorder> { NoOpExecutionHistoryRecorder() }
     single { ExecutionEventPublisher(get()) }
-    single { StubCapabilityActionExecutor(get<CapabilityFramework>()) }
+    single<ActionExecutor> { ChainingCapabilityActionExecutor(get<CapabilityFramework>()) }
     single {
         ExecutionRuntimeFactory(
             dependencyResolver = get(),
@@ -48,7 +49,7 @@ val executionModule = module {
             monitor = get(),
             metrics = get(),
             eventPublisher = get(),
-            actionExecutor = get(),
+            actionExecutor = get<ActionExecutor>(),
             actionPolicyGate = get<ActionPolicyGate>(),
             historyRecorder = get(),
             rollbackManager = get(),

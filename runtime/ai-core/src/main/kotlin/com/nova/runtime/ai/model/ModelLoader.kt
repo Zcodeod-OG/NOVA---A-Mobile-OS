@@ -1,6 +1,11 @@
 package com.nova.runtime.ai.model
 
-/** Platform-agnostic model file resolution and availability checks. */
+/**
+ * Platform-agnostic model file resolution and availability checks.
+ *
+ * [isAvailable] and [availabilityReport] must not load ONNX sessions or copy large assets;
+ * use [resolvePath] for lazy first-use resolution (including optional asset copy).
+ */
 interface ModelLoader {
     suspend fun resolvePath(fileName: String): String?
 
@@ -8,6 +13,7 @@ interface ModelLoader {
 
     suspend fun availabilityReport(): List<ModelAvailability>
 
+    /** Copies bundled assets for [fileNames] only when missing on disk. Not for startup use. */
     suspend fun ensureModelsFromAssets(fileNames: List<String> = ModelAssetPaths.ALL_REQUIRED): List<ModelAvailability>
 }
 

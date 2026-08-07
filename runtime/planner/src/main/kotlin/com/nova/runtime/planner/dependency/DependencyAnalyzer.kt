@@ -54,6 +54,12 @@ class DefaultDependencyAnalyzer : DependencyAnalyzer {
             }
         }
 
+        val sortedExecuteTasks = executeTasks.sortedBy { it.sortOrder }
+        for (index in 1 until sortedExecuteTasks.size) {
+            dependencyMap.getValue(sortedExecuteTasks[index].key)
+                .add(sortedExecuteTasks[index - 1].key)
+        }
+
         completeTask?.let { complete ->
             val terminalTasks = (executeTasks + listOfNotNull(goalTask)).map { it.key }
             terminalTasks.forEach { terminal ->

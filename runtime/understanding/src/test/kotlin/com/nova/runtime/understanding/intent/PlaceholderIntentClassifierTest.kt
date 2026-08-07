@@ -36,6 +36,8 @@ class PlaceholderIntentClassifierTest {
             Arguments.of("lookup contact John", "lookup_contact"),
             Arguments.of("semantic search vacation photos", "semantic_search"),
             Arguments.of("share file report.pdf", "share_file"),
+            Arguments.of("send the invoice document to Atharv on whatsapp", "send_document_whatsapp"),
+            Arguments.of("find budget report and share on whatsapp to John", "send_document_whatsapp"),
         )
 
         private fun normalized(payload: String): NormalizedObservation {

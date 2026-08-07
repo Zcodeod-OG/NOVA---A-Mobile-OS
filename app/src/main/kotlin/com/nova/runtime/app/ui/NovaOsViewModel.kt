@@ -2,15 +2,20 @@ package com.nova.runtime.app.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nova.runtime.ai.model.ModelAssetPaths
+import com.nova.runtime.ai.model.ModelLoader
 import com.nova.runtime.app.ui.components.ActivityItem
+import com.nova.runtime.conversation.speech.SpeechRecognizer
 import com.nova.runtime.events.EventBus
 import com.nova.runtime.events.RuntimeEvent
 import com.nova.runtime.events.capability.CapabilityEvents
 import com.nova.runtime.events.execution.ExecutionEvents
 import com.nova.runtime.events.planner.PlannerEvents
 import com.nova.runtime.events.reasoning.ReasoningEvents
+import com.nova.runtime.events.storage.StorageEvents
 import com.nova.runtime.events.system.SystemEvents
 import com.nova.runtime.events.understanding.UnderstandingEvents
+import com.nova.runtime.kernel.lifecycle.LifecycleManager
 import com.nova.runtime.models.RuntimeLifecycleState
 import com.nova.runtime.models.RuntimeModule
 import com.nova.runtime.orchestrator.CognitivePipelineOrchestrator
@@ -20,8 +25,13 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -29,6 +39,9 @@ import kotlinx.coroutines.launch
 class NovaOsViewModel(
     private val orchestrator: CognitivePipelineOrchestrator,
     private val eventBus: EventBus,
+    private val speechRecognizer: SpeechRecognizer,
+    private val modelLoader: ModelLoader,
+    private val lifecycleManager: LifecycleManager,
 ) : ViewModel() {
 
     private val _lifecycleState = MutableStateFlow(RuntimeLifecycleState.CREATED)
@@ -40,42 +53,173 @@ class NovaOsViewModel(
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing: StateFlow<Boolean> = _isProcessing.asStateFlow()
 
+    private val _isRecordingVoice = MutableStateFlow(false)
+    val isRecordingVoice: StateFlow<Boolean> = _isRecordingVoice.asStateFlow()
+
+    private val _voiceStatusMessage = MutableStateFlow<String?>(null)
+    val voiceStatusMessage: StateFlow<String?> = _voiceStatusMessage.asStateFlow()
+
+    private val _whisperAvailable = MutableStateFlow(false)
+    val whisperAvailable: StateFlow<Boolean> = _whisperAvailable.asStateFlow()
+
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
         .withZone(ZoneId.systemDefault())
 
+    private val commandMutex = Mutex()
+
     init {
+        _lifecycleState.value = lifecycleManager.state.value
         subscribeToRuntimeEvents()
         seedBootEvents()
+        viewModelScope.launch {
+            replayMissedRuntimeEvents()
+            withContext(Dispatchers.IO) {
+                reportModelAvailability()
+            }
+        }
+    }
+
+    private suspend fun reportModelAvailability() {
+        val report = modelLoader.availabilityReport()
+        report.forEach { model ->
+            val sizeMb = model.sizeBytes / (1024 * 1024)
+            if (model.fileName == ModelAssetPaths.WHISPER_MODEL) {
+                _whisperAvailable.value = model.available
+                if (!model.available) {
+                    _voiceStatusMessage.value =
+                        "Whisper ONNX not installed — MIC uses device speech recognition."
+                }
+            }
+            prependActivity(
+                ActivityItem(
+                    timestamp = now(),
+                    source = "MODELS",
+                    message = if (model.available) {
+                        "${model.fileName} available (${sizeMb} MB)"
+                    } else {
+                        "${model.fileName} missing (optional fallback active)"
+                    },
+                    isAlert = model.available,
+                ),
+            )
+        }
     }
 
     fun updateLifecycleState(state: RuntimeLifecycleState) {
         _lifecycleState.value = state
     }
 
-    fun submitCommand(command: String) {
-        if (command.isBlank() || _isProcessing.value) return
+    fun setVoiceRecording(active: Boolean, listeningHint: String = "Listening… tap mic to stop.") {
+        _isRecordingVoice.value = active
+        if (active) {
+            _voiceStatusMessage.value = listeningHint
+        }
+    }
 
-        val traceId = UUID.randomUUID()
+    fun clearVoiceStatus() {
+        _voiceStatusMessage.value = null
+    }
+
+    fun reportVoiceError(message: String) {
+        _voiceStatusMessage.value = message
         prependActivity(
             ActivityItem(
                 timestamp = now(),
-                source = "USER",
-                message = command,
+                source = "VOICE",
+                message = message,
                 isAlert = true,
             ),
         )
+    }
+
+    fun submitPlatformSpeechTranscript(transcript: String) {
+        if (transcript.isBlank()) return
+        _voiceStatusMessage.value = null
         prependActivity(
             ActivityItem(
                 timestamp = now(),
-                source = "PIPELINE",
-                message = "Processing command (trace=${traceId.toString().take(8)})…",
+                source = "VOICE",
+                message = "Heard: $transcript",
+                isAlert = true,
             ),
         )
+        submitCommandInternal(transcript)
+    }
+
+    fun submitVoiceCommand(audioPayload: ByteArray) {
+        if (audioPayload.isEmpty()) return
 
         viewModelScope.launch {
+            _isRecordingVoice.value = false
+            val sessionId = UUID.randomUUID().toString()
+            val transcript = speechRecognizer.transcribe(sessionId, audioPayload)
+
+            if (transcript.isNullOrBlank() || isStubTranscript(transcript)) {
+                _voiceStatusMessage.value =
+                    "Could not transcribe audio. Add whisper-tiny.onnx to assets/models/ or type your command."
+                prependActivity(
+                    ActivityItem(
+                        timestamp = now(),
+                        source = "VOICE",
+                        message = "Voice transcription failed — no usable speech detected.",
+                        isAlert = true,
+                    ),
+                )
+                return@launch
+            }
+
+            _voiceStatusMessage.value = null
+            prependActivity(
+                ActivityItem(
+                    timestamp = now(),
+                    source = "VOICE",
+                    message = "Transcribed: $transcript",
+                    isAlert = true,
+                ),
+            )
+
+            processCommand(transcript)
+        }
+    }
+
+    fun submitCommand(command: String) {
+        submitCommandInternal(command)
+    }
+
+    private fun submitCommandInternal(command: String) {
+        if (command.isBlank()) return
+        viewModelScope.launch {
+            processCommand(command)
+        }
+    }
+
+    private suspend fun processCommand(command: String) {
+        commandMutex.withLock {
             _isProcessing.value = true
+            val traceId = UUID.randomUUID()
+            prependActivity(
+                ActivityItem(
+                    timestamp = now(),
+                    source = "USER",
+                    message = command,
+                    isAlert = true,
+                ),
+            )
+            prependActivity(
+                ActivityItem(
+                    timestamp = now(),
+                    source = "PIPELINE",
+                    message = "Processing command (trace=${traceId.toString().take(8)})…",
+                ),
+            )
+
             try {
-                when (val result = orchestrator.processUserCommand(command, traceId.toString())) {
+                val result = withContext(Dispatchers.Default) {
+                    withTimeout(COMMAND_TIMEOUT_MS) {
+                        orchestrator.processUserCommand(command, traceId.toString())
+                    }
+                }
+                when (result) {
                     is PipelineResult.Success -> {
                         prependActivity(
                             ActivityItem(
@@ -97,6 +241,15 @@ class NovaOsViewModel(
                         )
                     }
                 }
+            } catch (exception: Exception) {
+                prependActivity(
+                    ActivityItem(
+                        timestamp = now(),
+                        source = "PIPELINE",
+                        message = "Unexpected error: ${exception.message ?: exception::class.simpleName}",
+                        isAlert = true,
+                    ),
+                )
             } finally {
                 _isProcessing.value = false
             }
@@ -108,6 +261,8 @@ class NovaOsViewModel(
             SystemEvents.RUNTIME_STARTED,
             SystemEvents.RUNTIME_READY,
             SystemEvents.RUNTIME_ERROR,
+            StorageEvents.INDEXING_STARTED,
+            StorageEvents.INDEXING_COMPLETED,
             UnderstandingEvents.INTENT_DETECTED,
             UnderstandingEvents.NIR_GENERATED,
             ReasoningEvents.STARTED,
@@ -132,6 +287,10 @@ class NovaOsViewModel(
                     formatEvent(event)?.let { item ->
                         prependActivity(item)
                     }
+                    if (event.eventType == SystemEvents.RUNTIME_READY) {
+                        _lifecycleState.value = RuntimeLifecycleState.READY
+                        reportModelAvailability()
+                    }
                 }
             },
         )
@@ -139,14 +298,23 @@ class NovaOsViewModel(
 
     private fun seedBootEvents() {
         _activityFeed.value = listOf(
-            ActivityItem(now(), "KERNEL", "System boot initiated. Loading Koin DI modules…"),
-            ActivityItem(now(), "MEMORY", "Vector DB initialized (512-dim embedding engine)"),
-            ActivityItem(now(), "INFERENCE", "Quantized model weight loaded: NOVA-Local-1.0"),
+            ActivityItem(now(), "KERNEL", "System boot initiated. Loading models and runtime modules…"),
         )
+    }
+
+    private suspend fun replayMissedRuntimeEvents() {
+        eventBus.publishedEvents()
+            .filter { it.eventType in BOOT_REPLAY_EVENTS }
+            .forEach { event ->
+                formatEvent(event)?.let { prependActivity(it) }
+            }
+        _lifecycleState.value = lifecycleManager.state.value
     }
 
     private fun formatEvent(event: RuntimeEvent): ActivityItem? {
         val message = when (event.eventType) {
+            SystemEvents.RUNTIME_STARTED ->
+                "Runtime modules initializing…"
             SystemEvents.RUNTIME_READY ->
                 "Runtime lifecycle transitioned to READY"
             SystemEvents.RUNTIME_ERROR -> {
@@ -157,6 +325,12 @@ class NovaOsViewModel(
                     "Runtime error reported"
                 }
             }
+            StorageEvents.INDEXING_STARTED ->
+                (event.payload as? Map<*, *>)?.get("message")?.toString()
+                    ?: "Indexing gallery photos and downloads…"
+            StorageEvents.INDEXING_COMPLETED ->
+                (event.payload as? Map<*, *>)?.get("message")?.toString()
+                    ?: "Gallery indexing completed"
             UnderstandingEvents.INTENT_DETECTED -> "Intent detected"
             UnderstandingEvents.NIR_GENERATED -> "NIR generated and validated"
             ReasoningEvents.STARTED -> "Reasoning engine started"
@@ -215,6 +389,11 @@ class NovaOsViewModel(
 
     companion object {
         private const val MAX_FEED_ITEMS = 50
+        private const val COMMAND_TIMEOUT_MS = 60_000L
+        private val BOOT_REPLAY_EVENTS = setOf(
+            SystemEvents.RUNTIME_STARTED,
+            SystemEvents.RUNTIME_READY,
+        )
         private val ALERT_EVENTS = setOf(
             SystemEvents.RUNTIME_READY,
             ExecutionEvents.GRAPH_COMPLETED,
@@ -222,5 +401,10 @@ class NovaOsViewModel(
             CapabilityEvents.EXECUTED,
             CapabilityEvents.FAILED,
         )
+
+        private fun isStubTranscript(text: String): Boolean {
+            val trimmed = text.trim()
+            return trimmed.startsWith("voice input (") && trimmed.endsWith(" bytes)")
+        }
     }
 }

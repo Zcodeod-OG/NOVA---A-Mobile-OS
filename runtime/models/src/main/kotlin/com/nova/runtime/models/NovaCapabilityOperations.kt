@@ -26,6 +26,7 @@ object NovaCapabilityOperations {
     )
 
     fun forIntent(intentType: String): String? = when (intentType) {
+        "send_document_whatsapp" -> WHATSAPP_SEND_MESSAGE
         "send_whatsapp_message" -> WHATSAPP_SEND_MESSAGE
         "search_photos" -> SEARCH_PHOTOS
         "search_documents" -> SEARCH_DOCUMENTS

@@ -6,6 +6,7 @@ import com.nova.runtime.ai.model.HashEmbeddingGenerator
 import com.nova.runtime.ai.model.OcrEngine
 import com.nova.runtime.ai.model.OcrResult
 import com.nova.runtime.ai.native.indexing.EmbeddingIndexer
+import com.nova.runtime.ai.native.ingestion.MediaStoreIngestionService
 import com.nova.runtime.ai.native.storage.CosineVectorIndex
 import com.nova.runtime.storage.dao.DocumentDao
 import com.nova.runtime.storage.dao.PhotoDao
@@ -16,6 +17,8 @@ import com.nova.runtime.storage.repository.EmbeddingRepository
 import com.nova.runtime.storage.repository.PhotoRepository
 import com.nova.runtime.storage.search.SearchRequest
 import com.nova.runtime.utils.logging.NoOpRuntimeLogger
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -24,8 +27,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class SemanticSearchServiceTest {
+    private lateinit var context: Context
     private lateinit var vectorIndex: CosineVectorIndex
     private lateinit var embeddingGenerator: EmbeddingGenerator
     private lateinit var photoRepository: FakePhotoRepository
@@ -35,6 +44,7 @@ class SemanticSearchServiceTest {
 
     @Before
     fun setUp() {
+        context = ApplicationProvider.getApplicationContext()
         vectorIndex = CosineVectorIndex()
         embeddingGenerator = HashEmbeddingGenerator(dimension = 32)
         photoRepository = FakePhotoRepository()
@@ -53,12 +63,25 @@ class SemanticSearchServiceTest {
             photoRepository = photoRepository,
             documentRepository = documentRepository,
         )
+        val ingestionService = MediaStoreIngestionService(
+            mediaStoreQuery = com.nova.runtime.storage.search.NoOpMediaStoreQueryPort(),
+            downloadsQuery = com.nova.runtime.storage.search.NoOpDownloadsQueryPort(),
+            photoDao = FakePhotoDao(photoRepository),
+            documentDao = FakeDocumentDao(documentRepository),
+            photoRepository = photoRepository,
+            documentRepository = documentRepository,
+            embeddingIndexer = indexer,
+            searchIndexPipeline = pipeline,
+            context = context,
+            logger = NoOpRuntimeLogger(),
+        )
         service = SemanticSearchService(
             embeddingGenerator = embeddingGenerator,
             vectorIndex = vectorIndex,
             photoRepository = photoRepository,
             documentRepository = documentRepository,
             searchIndexPipeline = pipeline,
+            mediaStoreIngestionService = ingestionService,
             logger = NoOpRuntimeLogger(),
         )
     }

@@ -1,6 +1,7 @@
 package com.nova.runtime.planner.generation
 
 import com.nova.runtime.models.Nir
+import com.nova.runtime.models.NovaCapabilityOperations
 import com.nova.runtime.models.ReasoningContext
 import com.nova.runtime.planner.model.PlanTask
 import com.nova.runtime.planner.model.SubGoal
@@ -102,13 +103,70 @@ class DefaultTaskGenerator : TaskGenerator {
     ): Map<String, String> = buildMap {
         put("capability", capability)
         put("goal", nir.goal)
-        put("capabilityType", nir.constraints["capabilityType"] ?: capability)
-        put("operation", nir.constraints["operation"] ?: "execute")
-        nir.constraints["capabilityOperation"]?.let { put("capabilityOperation", it) }
+
+        when {
+            capability == "search.documents" || capability == NovaCapabilityOperations.SEARCH_DOCUMENTS -> {
+                put("capabilityType", "search.documents")
+                put("operation", "search")
+                put("capabilityOperation", NovaCapabilityOperations.SEARCH_DOCUMENTS)
+                val query = nir.constraints["documentQuery"]
+                    ?: nir.constraints["query"]
+                    ?: nir.context["rawPayload"].orEmpty()
+                put("query", query)
+            }
+            capability == "whatsapp" || capability.startsWith("whatsapp") -> {
+                put("capabilityType", "whatsapp")
+                put("operation", "send_message")
+                put("capabilityOperation", NovaCapabilityOperations.WHATSAPP_SEND_MESSAGE)
+                nir.constraints["compoundFlow"]?.let {
+                    put("compoundFlow", it)
+                    put("awaitSearchResult", "true")
+                }
+            }
+            capability == "alarm" || nir.constraints["capabilityOperation"] == NovaCapabilityOperations.ALARM_CREATE -> {
+                put("capabilityType", "alarm")
+                put("operation", "create")
+                put("capabilityOperation", NovaCapabilityOperations.ALARM_CREATE)
+            }
+            capability == "calendar" || nir.constraints["capabilityOperation"] == NovaCapabilityOperations.CALENDAR_CREATE -> {
+                put("capabilityType", "calendar")
+                put("operation", "create")
+                put("capabilityOperation", NovaCapabilityOperations.CALENDAR_CREATE)
+            }
+            else -> {
+                put("capabilityType", nir.constraints["capabilityType"] ?: capability)
+                put("operation", nir.constraints["operation"] ?: "execute")
+                nir.constraints["capabilityOperation"]?.let { put("capabilityOperation", it) }
+            }
+        }
+
         nir.constraints["channel"]?.let { put("channel", it) }
-        nir.constraints["recipient"]?.let { put("recipient", it) }
+        nir.constraints["recipient"]?.let {
+            put("recipient", it)
+            put("name", it)
+        }
         nir.constraints["fileName"]?.let { put("fileName", it) }
-        nir.context["rawPayload"]?.let { put("query", it) }
+        nir.constraints["message"]?.let {
+            put("message", it)
+            put("text", it)
+        }
+        nir.constraints["triggerAtMillis"]?.let { put("triggerAtMillis", it) }
+        nir.constraints["title"]?.let { put("title", it) }
+        nir.constraints["startTime"]?.let { put("startTime", it) }
+        nir.constraints["endTime"]?.let { put("endTime", it) }
+        nir.context["rawPayload"]?.let { payload ->
+            if (!containsKey("query")) {
+                put("query", payload)
+            }
+            if (
+                nir.constraints["capabilityOperation"] == NovaCapabilityOperations.WHATSAPP_SEND_MESSAGE &&
+                nir.constraints["compoundFlow"] == null &&
+                !containsKey("message")
+            ) {
+                put("message", payload)
+                put("text", payload)
+            }
+        }
         if (nir.entities.isNotEmpty()) {
             put("entities", nir.entities.sorted().joinToString(","))
         }

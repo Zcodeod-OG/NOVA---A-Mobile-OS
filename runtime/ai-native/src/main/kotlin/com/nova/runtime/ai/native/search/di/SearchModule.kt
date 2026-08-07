@@ -1,6 +1,7 @@
 package com.nova.runtime.ai.native.search.di
 
 import com.nova.runtime.ai.native.indexing.EmbeddingIndexer
+import com.nova.runtime.ai.native.ingestion.MediaStoreIngestionService
 import com.nova.runtime.ai.native.search.SearchIndexPipeline
 import com.nova.runtime.ai.native.search.SemanticSearchService
 import com.nova.runtime.ai.native.search.provider.DocumentSearchCapabilityProvider
@@ -9,6 +10,7 @@ import com.nova.runtime.ai.native.search.provider.SemanticSearchCapabilityProvid
 import com.nova.runtime.capability.provider.CapabilityProvider
 import com.nova.runtime.capability.registry.CapabilityRegistry
 import com.nova.runtime.storage.search.PhotoSearchService
+import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
 /** Koin wiring for search services and capability providers. */
@@ -32,21 +34,47 @@ val searchModule = module {
     }
 
     single {
+        MediaStoreIngestionService(
+            mediaStoreQuery = get(),
+            downloadsQuery = get(),
+            photoDao = get(),
+            documentDao = get(),
+            photoRepository = get(),
+            documentRepository = get(),
+            embeddingIndexer = get(),
+            searchIndexPipeline = get(),
+            context = androidContext(),
+            logger = get(),
+        )
+    }
+
+    single {
         SemanticSearchService(
             embeddingGenerator = get(),
             vectorIndex = get(),
             photoRepository = get(),
             documentRepository = get(),
             searchIndexPipeline = get(),
+            mediaStoreIngestionService = get(),
             logger = get(),
         )
     }
 
-    single { PhotoSearchCapabilityProvider(photoSearchService = get()) }
-    single { DocumentSearchCapabilityProvider(documentSearchService = get()) }
+    single {
+        PhotoSearchCapabilityProvider(
+            photoSearchService = get(),
+            semanticSearchService = get(),
+        )
+    }
+    single {
+        DocumentSearchCapabilityProvider(
+            documentSearchService = get(),
+            semanticSearchService = get(),
+        )
+    }
     single { SemanticSearchCapabilityProvider(semanticSearchService = get()) }
 
-    single(createdAtStart = true) {
+    single {
         SearchCapabilityRegistrar(
             registry = get(),
             providers = listOf(

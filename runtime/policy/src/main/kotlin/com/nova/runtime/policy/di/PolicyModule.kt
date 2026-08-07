@@ -17,18 +17,15 @@ import org.koin.dsl.module
 val policyModule = module {
     single<PolicyEnvironment> { DefaultPolicyEnvironment() }
     single { PolicyEventPublisher(get()) }
-    single<List<com.nova.runtime.policy.evaluator.PolicyEvaluator>> {
-        listOf(
-            PermissionPolicyEvaluator(get()),
-            SafetyPolicyEvaluator(),
-            ConfirmationPolicyEvaluator(),
-            PrivacyPolicyEvaluator(),
-            BatteryPolicyEvaluator(get()),
-        )
-    }
     single<PolicyEngine> {
         PolicyEngineImpl(
-            evaluators = get(),
+            evaluators = listOf(
+                PermissionPolicyEvaluator(get()),
+                SafetyPolicyEvaluator(),
+                ConfirmationPolicyEvaluator(),
+                PrivacyPolicyEvaluator(),
+                BatteryPolicyEvaluator(get()),
+            ),
             eventPublisher = get(),
             logger = get(),
         )
