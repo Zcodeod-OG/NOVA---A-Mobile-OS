@@ -67,7 +67,7 @@ class VoiceCaptureController(
 
         if (!platformSpeechRecognizer.isAvailable) {
             viewModel.reportVoiceError(
-                "Speech recognition unavailable. Install whisper-tiny.onnx for offline voice, or type your command.",
+                "Speech recognition unavailable. Download whisper-tiny.onnx for offline voice, or type your command.",
             )
             return
         }
@@ -75,7 +75,7 @@ class VoiceCaptureController(
         scope.launch {
             viewModel.setVoiceRecording(
                 active = true,
-                listeningHint = "Listening… speak your command, then tap REC when done.",
+                listeningHint = "Device speech recognition (explicit fallback) — tap REC when done.",
             )
             platformSpeechRecognizer.listenUntilDone()
                 .onSuccess { transcript ->

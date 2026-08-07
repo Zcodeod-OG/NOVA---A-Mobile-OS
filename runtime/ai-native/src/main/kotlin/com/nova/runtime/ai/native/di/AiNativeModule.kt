@@ -1,13 +1,20 @@
 package com.nova.runtime.ai.native.di
 
 import com.nova.runtime.ai.model.EmbeddingGenerator
+import com.nova.runtime.ai.model.ImageEmbeddingGenerator
+import com.nova.runtime.ai.model.ModelDownloadManager
 import com.nova.runtime.ai.model.ModelLoader
+import com.nova.runtime.ai.native.model.AndroidModelDownloadManager
 import com.nova.runtime.ai.model.OcrEngine
 import com.nova.runtime.ai.native.indexing.EmbeddingIndexer
+import com.nova.runtime.ai.native.ingestion.AndroidPhotoImageLoader
+import com.nova.runtime.ai.native.ingestion.PhotoImageLoader
 import com.nova.runtime.ai.native.inference.OnDeviceModelRegistryFactory
 import com.nova.runtime.ai.native.model.AndroidModelLoader
 import com.nova.runtime.ai.native.ocr.MlKitOcrEngine
 import com.nova.runtime.ai.native.onnx.OnnxEmbeddingGenerator
+import com.nova.runtime.ai.native.onnx.OnnxImageEmbeddingGenerator
+import com.nova.runtime.ai.native.tokenizer.MiniLmTokenizer
 import com.nova.runtime.ai.native.onnx.WhisperOnnxAsrEngine
 import com.nova.runtime.ai.native.speech.WhisperSpeechRecognizer
 import com.nova.runtime.ai.native.storage.CosineVectorIndex
@@ -21,15 +28,36 @@ import org.koin.dsl.module
 val aiNativeModule = module {
     single<ModelLoader> { AndroidModelLoader(androidContext()) }
 
+    single<ModelDownloadManager> {
+        AndroidModelDownloadManager(
+            context = androidContext(),
+            modelLoader = get(),
+        )
+    }
+
     single { CosineVectorIndex() }
     single<VectorIndex> { get<CosineVectorIndex>() }
+
+    single {
+        MiniLmTokenizer.fromAsset(androidContext())
+    }
 
     single<EmbeddingGenerator> {
         OnnxEmbeddingGenerator(
             modelLoader = get(),
+            tokenizer = get(),
             logger = get(),
         )
     }
+
+    single<ImageEmbeddingGenerator> {
+        OnnxImageEmbeddingGenerator(
+            modelLoader = get(),
+            logger = get(),
+        )
+    }
+
+    single<PhotoImageLoader> { AndroidPhotoImageLoader(androidContext()) }
 
     single { WhisperOnnxAsrEngine(modelLoader = get(), logger = get()) }
     single<SpeechRecognizer> {
@@ -48,6 +76,7 @@ val aiNativeModule = module {
     single {
         EmbeddingIndexer(
             embeddingGenerator = get(),
+            imageEmbeddingGenerator = get(),
             embeddingRepository = get(),
             vectorIndex = get(),
             ocrEngine = get(),

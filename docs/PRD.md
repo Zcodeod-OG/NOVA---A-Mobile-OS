@@ -14,6 +14,12 @@
 
 * Document 00 – Product Vision
 
+**Related Engineering Docs:**
+
+* [TDD](./TDD.md) — runtime architecture, model pipeline (§22)
+* [DPS](./DPS.md) — indexing, vector search, storage (§9–10)
+* [AIS](./AIS.md) — Android integration, model delivery (§4.9), WorkManager
+
 ---
 
 # 1. Executive Summary
@@ -436,6 +442,48 @@ Every shipped feature must satisfy all of the following:
 * Conversation state machine
 * Plugin API
 * Battery optimization strategy
+
+---
+
+# 14. Implementation Status
+
+This section tracks engineering progress against the product vision. **The PRD vision is unchanged:** NOVA is a local AI runtime — not a cloud assistant. All reasoning, retrieval, indexing, and planning remain on-device whenever technically possible.
+
+> "Android manages apps. NOVA manages intentions."
+
+## G2 — Universal Local Search (Active)
+
+G2 is the primary gap between current builds and the PRD vision. Closing it requires three coordinated workstreams (see [DPS §9–10](./DPS.md), [TDD §22](./TDD.md), [AIS §4.9](./AIS.md#49-model-asset-delivery)):
+
+| Workstream | Target | Status |
+| ---------- | ------ | ------ |
+| Full-device indexing | WorkManager scans MediaStore, SAF, Downloads, and accessible storage; incremental sync on file change | **In progress** |
+| Production embeddings | Real `all-MiniLM-L6-v2` tokenizer + ONNX inference; multimodal image embeddings | **In progress** |
+| Model delivery | First-run download of required ONNX assets; Play Asset Delivery for store builds | **Planned** |
+
+### Current vs. Target
+
+| Capability | Current (pre-G2 close) | Target (PRD-aligned) |
+| ---------- | ---------------------- | ---------------------- |
+| Semantic search | Keyword/OCR fallback when embedding model absent | Vector k-NN on indexed content ≥ 90% top-3 accuracy |
+| Index coverage | Partial / dev-scoped scans | Full-device incremental index |
+| Embeddings | Hash-based dev fallback (`hash-fallback-v1`) | Production MiniLM + multimodal pipeline only |
+| Voice ASR | Platform recognizer when Whisper ONNX missing | Local Whisper ONNX as default offline path |
+| Cloud dependency | None for data; optional platform ASR fallback | **Zero cloud** for MVP offline features |
+
+### Explicit Non-Goals (unchanged)
+
+* NOVA does **not** route user content, queries, or embeddings to a cloud assistant backend.
+* Hash embeddings and platform speech recognition are **development fallbacks only** — not acceptable production paths (see [TDD §22.4](./TDD.md)).
+
+### Exit Criteria for G2
+
+G2 is complete when:
+
+* A fresh install indexes the user's accessible library without manual file placement.
+* Required models download on first run (or via Play Asset Delivery) before semantic search is advertised.
+* Search latency meets §4 budgets (< 500 ms after indexing) on a reference mid-range device.
+* No personal data leaves the device during indexing, embedding, or retrieval.
 
 ---
 

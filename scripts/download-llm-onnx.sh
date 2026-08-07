@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # Download quantized LLM ONNX models for NOVA (llm-light + llm-full).
+#
+# NOVA is local-first — these models are required for on-device reasoning.
+# Not committed to git due to size (~1.7 GB combined).
+# Same HuggingFace URLs used by first-run ModelDownloadManager on device.
+# See MODEL_SETUP.md for full onboarding.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

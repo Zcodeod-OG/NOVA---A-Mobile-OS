@@ -34,7 +34,7 @@ interface EmbeddingGenerator {
     suspend fun embed(text: String): EmbeddingResult
 }
 
-/** Deterministic hash-based fallback for dev/CI when ONNX model is absent. */
+/** Deterministic hash-based embeddings for unit tests only — not used in production search. */
 class HashEmbeddingGenerator(
     override val dimension: Int = ModelAssetPaths.DEFAULT_EMBEDDING_DIMENSION,
     override val modelVersion: String = "hash-fallback-v1",

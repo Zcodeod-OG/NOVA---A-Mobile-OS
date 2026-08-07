@@ -59,7 +59,7 @@ app/src/main/assets/models/
 
 | Class | Replaces |
 |-------|----------|
-| `OnnxEmbeddingGenerator` | Hash/placeholder embeddings |
+| `OnnxEmbeddingGenerator` | Real MiniLM WordPiece tokenization; returns failure when model/tokenizer missing (no hash fallback) |
 | `OnnxGenerativeInferenceModel` | `RuleEngineInferenceModel` / `LightweightInferenceModel` |
 | `WhisperSpeechRecognizer` | `StubSpeechRecognizer` |
 | `MlKitOcrEngine` | OCR stub |

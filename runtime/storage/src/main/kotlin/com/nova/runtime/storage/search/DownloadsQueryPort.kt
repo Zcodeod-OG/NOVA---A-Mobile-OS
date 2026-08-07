@@ -2,7 +2,7 @@ package com.nova.runtime.storage.search
 
 /** Abstraction over Android MediaStore Downloads queries for document ingestion. */
 interface DownloadsQueryPort {
-    suspend fun queryDownloads(limit: Int): DownloadQueryResult
+    suspend fun queryDownloads(limit: Int, offset: Int = 0): DownloadQueryResult
 }
 
 data class DownloadItem(
@@ -20,5 +20,6 @@ data class DownloadQueryResult(
 
 /** No-op port for JVM tests and environments without Downloads access. */
 class NoOpDownloadsQueryPort : DownloadsQueryPort {
-    override suspend fun queryDownloads(limit: Int): DownloadQueryResult = DownloadQueryResult(emptyList())
+    override suspend fun queryDownloads(limit: Int, offset: Int): DownloadQueryResult =
+        DownloadQueryResult(emptyList())
 }

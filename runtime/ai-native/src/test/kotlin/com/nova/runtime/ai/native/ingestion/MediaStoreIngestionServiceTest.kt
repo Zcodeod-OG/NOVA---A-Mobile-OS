@@ -3,6 +3,8 @@ package com.nova.runtime.ai.native.ingestion
 import com.nova.runtime.ai.model.EmbeddingGenerator
 import com.nova.runtime.ai.model.EmbeddingResult
 import com.nova.runtime.ai.model.HashEmbeddingGenerator
+import com.nova.runtime.ai.model.HashImageEmbeddingGenerator
+import com.nova.runtime.ai.model.ImageEmbeddingGenerator
 import com.nova.runtime.ai.model.OcrEngine
 import com.nova.runtime.ai.model.OcrResult
 import com.nova.runtime.ai.native.indexing.EmbeddingIndexer
@@ -21,6 +23,7 @@ import com.nova.runtime.storage.search.DownloadsQueryPort
 import com.nova.runtime.storage.search.MediaImageItem
 import com.nova.runtime.storage.search.MediaImageQueryResult
 import com.nova.runtime.storage.search.MediaStoreQueryPort
+import com.nova.runtime.storage.search.NoOpDocumentsQueryPort
 import com.nova.runtime.utils.logging.NoOpRuntimeLogger
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
@@ -50,9 +53,11 @@ class MediaStoreIngestionServiceTest {
     private val documentRepository = RecordingDocumentRepository()
     private val vectorIndex = CosineVectorIndex()
     private val embeddingGenerator: EmbeddingGenerator = HashEmbeddingGenerator(dimension = 32)
+    private val imageEmbeddingGenerator: ImageEmbeddingGenerator = HashImageEmbeddingGenerator(dimension = 32)
     private val indexer =
         EmbeddingIndexer(
             embeddingGenerator = embeddingGenerator,
+            imageEmbeddingGenerator = imageEmbeddingGenerator,
             embeddingRepository = FakeEmbeddingRepository(),
             vectorIndex = vectorIndex,
             ocrEngine = StubOcrEngine(),
@@ -64,6 +69,7 @@ class MediaStoreIngestionServiceTest {
             documentDao = FakeDocumentDao(documentRepository),
             photoRepository = photoRepository,
             documentRepository = documentRepository,
+            photoImageLoader = PhotoImageLoader { "beach vacation text".toByteArray() },
         )
 
     @Test
@@ -133,13 +139,14 @@ class MediaStoreIngestionServiceTest {
         MediaStoreIngestionService(
             mediaStoreQuery = FakeMediaStoreQueryPort(mediaItems),
             downloadsQuery = FakeDownloadsQueryPort(downloads),
+            documentsQuery = NoOpDocumentsQueryPort(),
             photoDao = FakePhotoDao(photoRepository),
             documentDao = FakeDocumentDao(documentRepository),
             photoRepository = photoRepository,
             documentRepository = documentRepository,
             embeddingIndexer = indexer,
             searchIndexPipeline = pipeline,
-            context = context,
+            photoImageLoader = PhotoImageLoader { "beach vacation text".toByteArray() },
             logger = NoOpRuntimeLogger(),
         )
 
@@ -151,15 +158,21 @@ class MediaStoreIngestionServiceTest {
     private class FakeMediaStoreQueryPort(
         private val items: List<MediaImageItem>,
     ) : MediaStoreQueryPort {
-        override suspend fun queryImages(limit: Int): MediaImageQueryResult =
-            MediaImageQueryResult(items.take(limit))
+        override suspend fun queryImages(limit: Int, offset: Int): MediaImageQueryResult =
+            MediaImageQueryResult(items.drop(offset).take(limit))
+
+        override suspend fun queryVideos(limit: Int, offset: Int): MediaImageQueryResult =
+            MediaImageQueryResult(emptyList())
+
+        override suspend fun queryAudio(limit: Int, offset: Int): MediaImageQueryResult =
+            MediaImageQueryResult(emptyList())
     }
 
     private class FakeDownloadsQueryPort(
         private val items: List<DownloadItem>,
     ) : DownloadsQueryPort {
-        override suspend fun queryDownloads(limit: Int): DownloadQueryResult =
-            DownloadQueryResult(items.take(limit))
+        override suspend fun queryDownloads(limit: Int, offset: Int): DownloadQueryResult =
+            DownloadQueryResult(items.drop(offset).take(limit))
     }
 
     private class RecordingPhotoRepository : PhotoRepository {
@@ -229,6 +242,8 @@ class MediaStoreIngestionServiceTest {
         override suspend fun listRecent(limit: Int) = repository.records.values.take(limit)
         override suspend fun listUnindexedWithOcr(limit: Int) =
             repository.records.values.filter { it.embeddingId == null && !it.ocrText.isNullOrBlank() }.take(limit)
+        override suspend fun listUnindexed(limit: Int) =
+            repository.records.values.filter { it.embeddingId == null }.take(limit)
     }
 
     private class FakeDocumentDao(

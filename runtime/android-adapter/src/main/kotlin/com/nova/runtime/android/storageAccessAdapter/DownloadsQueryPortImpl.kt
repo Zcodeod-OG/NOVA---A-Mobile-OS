@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
 class DownloadsQueryPortImpl(
     private val context: Context,
 ) : DownloadsQueryPort {
-    override suspend fun queryDownloads(limit: Int): DownloadQueryResult =
+    override suspend fun queryDownloads(limit: Int, offset: Int): DownloadQueryResult =
         withContext(Dispatchers.IO) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
                 return@withContext DownloadQueryResult(emptyList())
@@ -43,7 +43,13 @@ class DownloadsQueryPortImpl(
                 val dateIndex = cursor.getColumnIndexOrThrow(MediaStore.Downloads.DATE_ADDED)
                 val sizeIndex = cursor.getColumnIndexOrThrow(MediaStore.Downloads.SIZE)
                 var count = 0
-                while (cursor.moveToNext() && count < limit.coerceAtLeast(1)) {
+                var skipped = 0
+                while (cursor.moveToNext()) {
+                    if (skipped < offset) {
+                        skipped++
+                        continue
+                    }
+                    if (count >= limit.coerceAtLeast(1)) break
                     val id = cursor.getLong(idIndex)
                     items.add(
                         DownloadItem(

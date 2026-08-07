@@ -5,19 +5,21 @@ import ai.onnxruntime.OrtEnvironment
 import com.nova.runtime.ai.embedding.VectorMath
 import com.nova.runtime.ai.model.EmbeddingGenerator
 import com.nova.runtime.ai.model.EmbeddingResult
-import com.nova.runtime.ai.model.HashEmbeddingGenerator
 import com.nova.runtime.ai.model.ModelAssetPaths
 import com.nova.runtime.ai.model.ModelLoader
+import com.nova.runtime.ai.native.tokenizer.MiniLmTokenizer
 import com.nova.runtime.utils.logging.NovaLogger
 
 /**
- * ONNX Runtime embedding generator with hash-based fallback when model file is absent.
- * Expects a sentence-transformer style ONNX export (input_ids, attention_mask, token_type_ids).
+ * ONNX Runtime embedding generator using real MiniLM BERT WordPiece tokenization.
+ *
+ * When the ONNX model or tokenizer assets are unavailable, returns [EmbeddingResult.Failure]
+ * instead of silently falling back to hash embeddings.
  */
 class OnnxEmbeddingGenerator(
     private val modelLoader: ModelLoader,
+    private val tokenizer: MiniLmTokenizer,
     private val logger: NovaLogger,
-    private val fallback: EmbeddingGenerator = HashEmbeddingGenerator(),
 ) : EmbeddingGenerator {
     private val sessionManager = OnnxSessionManager(
         modelLoader = modelLoader,
@@ -27,23 +29,41 @@ class OnnxEmbeddingGenerator(
     )
 
     override val modelVersion: String
-        get() = if (sessionManager.isLoaded) ModelAssetPaths.EMBEDDING_MODEL_VERSION else fallback.modelVersion
+        get() = ModelAssetPaths.EMBEDDING_MODEL_VERSION
 
     override val dimension: Int = ModelAssetPaths.DEFAULT_EMBEDDING_DIMENSION
 
     override val isLoaded: Boolean
-        get() = sessionManager.isLoaded
+        get() = sessionManager.isLoaded && tokenizer.isLoaded
 
     override suspend fun embed(text: String): EmbeddingResult {
         if (text.isBlank()) {
             return EmbeddingResult.Failure("Cannot embed empty text")
         }
 
+        if (!tokenizer.isLoaded) {
+            val reason = tokenizer.unavailableReason ?: "MiniLM tokenizer assets unavailable"
+            logger.warn("EMBEDDING", "Tokenizer unavailable: $reason")
+            return EmbeddingResult.Failure(
+                message = "Embedding tokenizer unavailable: $reason",
+                recoverable = true,
+            )
+        }
+
+        val tokenized = runCatching { tokenizer.tokenize(text) }
+            .getOrElse { error ->
+                logger.warn("EMBEDDING", "Tokenization failed: ${error.message}")
+                return EmbeddingResult.Failure(
+                    message = "Tokenization failed: ${error.message}",
+                    recoverable = true,
+                )
+            }
+
         val onnxResult = sessionManager.withSession { session ->
             val env = OrtEnvironment.getEnvironment()
-            val inputIds = SimpleTokenizer.encode(text)
-            val attentionMask = SimpleTokenizer.attentionMask(inputIds)
-            val tokenTypeIds = SimpleTokenizer.tokenTypeIds(inputIds)
+            val inputIds = tokenized.inputIds
+            val attentionMask = tokenized.attentionMask
+            val tokenTypeIds = tokenized.tokenTypeIds
             val batchShape = longArrayOf(1, inputIds.size.toLong())
 
             val inputs = linkedMapOf<String, OnnxTensor>()
@@ -55,10 +75,13 @@ class OnnxEmbeddingGenerator(
                 session.run(inputs).use { result ->
                     val outputTensor = result[0] as OnnxTensor
                     val tokenEmbeddings = OnnxTensorUtils.extractFloatMatrix(outputTensor)
-                    if (tokenEmbeddings.isEmpty()) {
-                        return@withSession null
+                    when {
+                        tokenEmbeddings.isNotEmpty() -> VectorMath.meanPool(tokenEmbeddings)
+                        else -> {
+                            val pooled = OnnxTensorUtils.extractFloatVector(outputTensor)
+                            if (pooled.isEmpty()) null else VectorMath.l2Normalize(pooled)
+                        }
                     }
-                    VectorMath.meanPool(tokenEmbeddings)
                 }
             } finally {
                 inputs.values.forEach { it.close() }
@@ -72,10 +95,14 @@ class OnnxEmbeddingGenerator(
                 dimension = onnxResult.size,
             )
         } else {
-            when (val fallbackResult = fallback.embed(text)) {
-                is EmbeddingResult.Success -> fallbackResult
-                is EmbeddingResult.Failure -> fallbackResult
-            }
+            logger.warn(
+                "EMBEDDING",
+                "ONNX embedding model unavailable or inference failed; semantic search requires ${ModelAssetPaths.EMBEDDING_MODEL}",
+            )
+            EmbeddingResult.Failure(
+                message = "ONNX embedding model unavailable or inference failed",
+                recoverable = true,
+            )
         }
     }
 

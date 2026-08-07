@@ -94,8 +94,14 @@ class PhotoSearchServiceTest {
     private class FakeMediaStoreQueryPort : MediaStoreQueryPort {
         var items: List<MediaImageItem> = emptyList()
 
-        override suspend fun queryImages(limit: Int): MediaImageQueryResult =
-            MediaImageQueryResult(items.take(limit))
+        override suspend fun queryImages(limit: Int, offset: Int): MediaImageQueryResult =
+            MediaImageQueryResult(items.drop(offset).take(limit))
+
+        override suspend fun queryVideos(limit: Int, offset: Int): MediaImageQueryResult =
+            MediaImageQueryResult(emptyList())
+
+        override suspend fun queryAudio(limit: Int, offset: Int): MediaImageQueryResult =
+            MediaImageQueryResult(emptyList())
     }
 
     private class FakePhotoDao : PhotoDao {
@@ -138,5 +144,8 @@ class PhotoSearchServiceTest {
 
         override suspend fun listUnindexedWithOcr(limit: Int): List<PhotoEntity> =
             records.values.filter { it.embeddingId == null && !it.ocrText.isNullOrBlank() }.take(limit)
+
+        override suspend fun listUnindexed(limit: Int): List<PhotoEntity> =
+            records.values.filter { it.embeddingId == null }.take(limit)
     }
 }

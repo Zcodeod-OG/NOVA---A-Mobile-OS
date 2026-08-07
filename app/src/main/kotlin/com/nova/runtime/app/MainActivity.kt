@@ -43,6 +43,8 @@ class MainActivity : ComponentActivity() {
         val needed = listOf(
             Manifest.permission.READ_CONTACTS,
             Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.READ_MEDIA_VIDEO,
+            Manifest.permission.READ_MEDIA_AUDIO,
             Manifest.permission.READ_CALENDAR,
             Manifest.permission.WRITE_CALENDAR,
         ).filter { permission ->

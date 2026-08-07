@@ -1,8 +1,12 @@
 package com.nova.runtime.storage.search
 
-/** AIS §4.3 — abstraction over Android MediaStore image queries. */
+/** AIS §4.3 — abstraction over Android MediaStore media queries. */
 interface MediaStoreQueryPort {
-    suspend fun queryImages(limit: Int): MediaImageQueryResult
+    suspend fun queryImages(limit: Int, offset: Int = 0): MediaImageQueryResult
+
+    suspend fun queryVideos(limit: Int, offset: Int = 0): MediaImageQueryResult
+
+    suspend fun queryAudio(limit: Int, offset: Int = 0): MediaImageQueryResult
 }
 
 data class MediaImageItem(
@@ -20,5 +24,12 @@ data class MediaImageQueryResult(
 
 /** No-op port for JVM tests and environments without MediaStore access. */
 class NoOpMediaStoreQueryPort : MediaStoreQueryPort {
-    override suspend fun queryImages(limit: Int): MediaImageQueryResult = MediaImageQueryResult(emptyList())
+    override suspend fun queryImages(limit: Int, offset: Int): MediaImageQueryResult =
+        MediaImageQueryResult(emptyList())
+
+    override suspend fun queryVideos(limit: Int, offset: Int): MediaImageQueryResult =
+        MediaImageQueryResult(emptyList())
+
+    override suspend fun queryAudio(limit: Int, offset: Int): MediaImageQueryResult =
+        MediaImageQueryResult(emptyList())
 }

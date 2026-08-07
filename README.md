@@ -22,6 +22,12 @@ See `docs/` for canonical architecture (PRD, TDD, MSP, EMS, DSS, DPS, AIS).
 
 Requires JDK 17+.
 
+## Models (local-first)
+
+NOVA requires on-device ONNX models for semantic search, offline voice, and LLM inference. `embedding-mini.onnx` (~86 MB) ships in git; LLM and Whisper models download on first launch or via scripts.
+
+See **[MODEL_SETUP.md](MODEL_SETUP.md)** for collaborator onboarding, `adb push`, and troubleshooting.
+
 ## DI
 
 **Koin** (per TDD §20). Kernel infrastructure is wired via `com.nova.runtime.kernel.di.kernelModule`; Sprint 0 service stubs are in `com.nova.runtime.app.di.sprint0StubsModule`.

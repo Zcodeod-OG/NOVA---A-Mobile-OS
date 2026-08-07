@@ -2,7 +2,10 @@ package com.nova.runtime.ai.native.search.provider
 
 import com.nova.runtime.ai.model.EmbeddingGenerator
 import com.nova.runtime.ai.model.HashEmbeddingGenerator
+import com.nova.runtime.ai.model.HashImageEmbeddingGenerator
+import com.nova.runtime.ai.model.ImageEmbeddingGenerator
 import com.nova.runtime.ai.native.indexing.EmbeddingIndexer
+import com.nova.runtime.ai.native.ingestion.PhotoImageLoader
 import com.nova.runtime.ai.native.search.SearchIndexPipeline
 import com.nova.runtime.ai.native.search.SemanticSearchService
 import com.nova.runtime.ai.native.storage.CosineVectorIndex
@@ -90,6 +93,7 @@ class SearchCapabilityProviderTest {
         val embeddingGenerator = object : EmbeddingGenerator by HashEmbeddingGenerator() {
             override val isLoaded: Boolean = embeddingLoaded
         }
+        val imageEmbeddingGenerator: ImageEmbeddingGenerator = HashImageEmbeddingGenerator()
         val vectorIndex = CosineVectorIndex()
         val documentRepository = FakeDocumentRepository()
         val documentId = UUID.randomUUID()
@@ -111,6 +115,7 @@ class SearchCapabilityProviderTest {
             )
         val indexer = EmbeddingIndexer(
             embeddingGenerator = embeddingGenerator,
+            imageEmbeddingGenerator = imageEmbeddingGenerator,
             embeddingRepository = FakeEmbeddingRepository(),
             vectorIndex = vectorIndex,
             ocrEngine = FakeOcrEngine(),
@@ -121,15 +126,23 @@ class SearchCapabilityProviderTest {
             documentDao = FakeDocumentDao(documentRepository),
             photoRepository = FakePhotoRepository(),
             documentRepository = documentRepository,
+            photoImageLoader = PhotoImageLoader { null },
         )
         pipeline.indexDocument(documentRepository.records.getValue(documentId))
         val semanticSearchService = SemanticSearchService(
             embeddingGenerator = embeddingGenerator,
+            imageEmbeddingGenerator = imageEmbeddingGenerator,
             vectorIndex = vectorIndex,
             photoRepository = FakePhotoRepository(),
             documentRepository = documentRepository,
             searchIndexPipeline = pipeline,
-            mediaStoreIngestionService = createNoOpIngestionService(pipeline, embeddingGenerator, vectorIndex),
+            mediaStoreIngestionService = createNoOpIngestionService(
+                pipeline,
+                embeddingGenerator,
+                imageEmbeddingGenerator,
+                vectorIndex,
+            ),
+            fullDeviceIndexer = null,
             logger = NoOpRuntimeLogger(),
         )
         return DocumentSearchCapabilityProvider(
@@ -141,23 +154,26 @@ class SearchCapabilityProviderTest {
     private fun createNoOpIngestionService(
         pipeline: SearchIndexPipeline,
         embeddingGenerator: EmbeddingGenerator,
+        imageEmbeddingGenerator: ImageEmbeddingGenerator,
         vectorIndex: CosineVectorIndex,
     ): com.nova.runtime.ai.native.ingestion.MediaStoreIngestionService =
         com.nova.runtime.ai.native.ingestion.MediaStoreIngestionService(
             mediaStoreQuery = com.nova.runtime.storage.search.NoOpMediaStoreQueryPort(),
             downloadsQuery = com.nova.runtime.storage.search.NoOpDownloadsQueryPort(),
+            documentsQuery = com.nova.runtime.storage.search.NoOpDocumentsQueryPort(),
             photoDao = FakePhotoDao(),
             documentDao = FakeDocumentDao(),
             photoRepository = FakePhotoRepository(),
             documentRepository = FakeDocumentRepository(),
             embeddingIndexer = EmbeddingIndexer(
                 embeddingGenerator = embeddingGenerator,
+                imageEmbeddingGenerator = imageEmbeddingGenerator,
                 embeddingRepository = FakeEmbeddingRepository(),
                 vectorIndex = vectorIndex,
                 ocrEngine = FakeOcrEngine(),
             ),
             searchIndexPipeline = pipeline,
-            context = context,
+            photoImageLoader = PhotoImageLoader { null },
             logger = NoOpRuntimeLogger(),
         )
 
@@ -235,5 +251,6 @@ class SearchCapabilityProviderTest {
         override suspend fun countByOcr(query: String) = 0
         override suspend fun listRecent(limit: Int) = emptyList<com.nova.runtime.storage.entities.PhotoEntity>()
         override suspend fun listUnindexedWithOcr(limit: Int) = emptyList<com.nova.runtime.storage.entities.PhotoEntity>()
+        override suspend fun listUnindexed(limit: Int) = emptyList<com.nova.runtime.storage.entities.PhotoEntity>()
     }
 }

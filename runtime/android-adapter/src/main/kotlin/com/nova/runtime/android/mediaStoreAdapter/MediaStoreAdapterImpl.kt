@@ -77,6 +77,7 @@ class MediaStoreAdapterImpl(
         parameters: Map<String, String>,
     ): Map<String, String> {
         val limit = parameters["limit"]?.toIntOrNull() ?: 50
+        val offset = parameters["offset"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
         val projection =
             arrayOf(
                 MediaStore.MediaColumns._ID,
@@ -99,7 +100,13 @@ class MediaStoreAdapterImpl(
             val dateIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_ADDED)
             val sizeIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
             var count = 0
-            while (cursor.moveToNext() && count < limit) {
+            var skipped = 0
+            while (cursor.moveToNext()) {
+                if (skipped < offset) {
+                    skipped++
+                    continue
+                }
+                if (count >= limit) break
                 val id = cursor.getLong(idIndex)
                 val uri = android.content.ContentUris.withAppendedId(collection, id).toString()
                 items.add(

@@ -1,13 +1,14 @@
 package com.nova.runtime.ai.native.search
 
 import com.nova.runtime.ai.native.indexing.EmbeddingIndexer
+import com.nova.runtime.ai.native.indexing.EmbeddingMetadata
+import com.nova.runtime.ai.native.ingestion.PhotoImageLoader
 import com.nova.runtime.storage.dao.DocumentDao
 import com.nova.runtime.storage.dao.PhotoDao
 import com.nova.runtime.storage.entities.DocumentEntity
 import com.nova.runtime.storage.entities.PhotoEntity
 import com.nova.runtime.storage.repository.DocumentRepository
 import com.nova.runtime.storage.repository.PhotoRepository
-import java.util.UUID
 
 /**
  * Ensures photos and documents are embedded and indexed before semantic search (DPS §9).
@@ -18,6 +19,7 @@ class SearchIndexPipeline(
     private val documentDao: DocumentDao,
     private val photoRepository: PhotoRepository,
     private val documentRepository: DocumentRepository,
+    private val photoImageLoader: PhotoImageLoader,
 ) {
     suspend fun ensureIndexed(request: IndexRequest) {
         if (request.indexPhotos) {
@@ -29,7 +31,7 @@ class SearchIndexPipeline(
     }
 
     suspend fun indexPhotos(limit: Int = DEFAULT_BATCH_LIMIT) {
-        val pending = photoDao.listUnindexedWithOcr(limit)
+        val pending = photoDao.listUnindexed(limit)
         pending.forEach { photo -> indexPhoto(photo) }
     }
 
@@ -39,8 +41,26 @@ class SearchIndexPipeline(
     }
 
     suspend fun indexPhoto(photo: PhotoEntity) {
+        val imageBytes = photoImageLoader.loadBytes(photo.uri)
+        if (imageBytes != null) {
+            val result = embeddingIndexer.indexPhoto(photo.id, imageBytes)
+            if (result.embeddingId == null) return
+            photoRepository.update(
+                photo.copy(
+                    ocrText = result.ocrText ?: photo.ocrText,
+                    embeddingId = result.embeddingId,
+                ),
+            )
+            return
+        }
+
         val text = photo.ocrText?.takeIf { it.isNotBlank() } ?: return
-        val embeddingId = embeddingIndexer.indexText(photo.id, OBJECT_TYPE_PHOTO, text) ?: return
+        val embeddingId = embeddingIndexer.indexText(
+            objectId = photo.id,
+            objectType = OBJECT_TYPE_PHOTO,
+            text = text,
+            embeddingKind = EmbeddingMetadata.KIND_OCR,
+        ) ?: return
         photoRepository.update(photo.copy(embeddingId = embeddingId))
     }
 

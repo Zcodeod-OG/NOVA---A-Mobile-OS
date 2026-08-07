@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nova.runtime.app.ui.components.ActivityStream
 import com.nova.runtime.app.ui.components.CommandBar
+import com.nova.runtime.app.ui.components.ModelDownloadOverlay
 import com.nova.runtime.app.ui.components.SystemHeader
 import com.nova.runtime.app.ui.theme.NovaCyanAccent
 import com.nova.runtime.app.ui.theme.NovaDarkBackground
@@ -63,6 +64,7 @@ fun NovaOsScreen(
     val isRecordingVoice by viewModel.isRecordingVoice.collectAsState()
     val voiceStatusMessage by viewModel.voiceStatusMessage.collectAsState()
     val whisperAvailable by viewModel.whisperAvailable.collectAsState()
+    val modelDownloadState by viewModel.modelDownloadState.collectAsState()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -123,6 +125,11 @@ fun NovaOsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             SystemHeader(lifecycleState = lifecycleState)
+
+            ModelDownloadOverlay(
+                session = modelDownloadState,
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 

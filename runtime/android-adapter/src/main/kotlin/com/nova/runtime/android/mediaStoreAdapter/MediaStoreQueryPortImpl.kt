@@ -10,12 +10,30 @@ import java.util.UUID
 class MediaStoreQueryPortImpl(
     private val mediaStoreAdapter: MediaStoreAdapter,
 ) : MediaStoreQueryPort {
-    override suspend fun queryImages(limit: Int): MediaImageQueryResult {
-        val result = mediaStoreAdapter.execute(
-            operation = MediaStoreOperations.QUERY_IMAGES,
-            parameters = mapOf("limit" to limit.coerceAtLeast(1).toString()),
-            traceId = UUID.randomUUID(),
-        )
+    override suspend fun queryImages(limit: Int, offset: Int): MediaImageQueryResult =
+        queryMedia(MediaStoreOperations.QUERY_IMAGES, limit, offset)
+
+    override suspend fun queryVideos(limit: Int, offset: Int): MediaImageQueryResult =
+        queryMedia(MediaStoreOperations.QUERY_VIDEOS, limit, offset)
+
+    override suspend fun queryAudio(limit: Int, offset: Int): MediaImageQueryResult =
+        queryMedia(MediaStoreOperations.QUERY_AUDIO, limit, offset)
+
+    private suspend fun queryMedia(
+        operation: String,
+        limit: Int,
+        offset: Int,
+    ): MediaImageQueryResult {
+        val result =
+            mediaStoreAdapter.execute(
+                operation = operation,
+                parameters =
+                    mapOf(
+                        "limit" to limit.coerceAtLeast(1).toString(),
+                        "offset" to offset.coerceAtLeast(0).toString(),
+                    ),
+                traceId = UUID.randomUUID(),
+            )
         return when (result) {
             is CapabilityResult.Success -> parseItems(result.output)
             is CapabilityResult.Failure -> MediaImageQueryResult(emptyList())
@@ -26,18 +44,19 @@ class MediaStoreQueryPortImpl(
         val rawItems = output["items"].orEmpty()
         if (rawItems.isBlank()) return MediaImageQueryResult(emptyList())
 
-        val items = rawItems.split("|").mapNotNull { entry ->
-            val parts = entry.split(":")
-            if (parts.size < 6) return@mapNotNull null
-            MediaImageItem(
-                mediaId = parts[0].toLongOrNull() ?: return@mapNotNull null,
-                uri = parts[1],
-                displayName = parts[2].ifBlank { null },
-                mimeType = parts[3].ifBlank { null },
-                dateAdded = parts[4].toLongOrNull() ?: 0L,
-                size = parts[5].toLongOrNull() ?: 0L,
-            )
-        }
+        val items =
+            rawItems.split("|").mapNotNull { entry ->
+                val parts = entry.split(":")
+                if (parts.size < 6) return@mapNotNull null
+                MediaImageItem(
+                    mediaId = parts[0].toLongOrNull() ?: return@mapNotNull null,
+                    uri = parts[1],
+                    displayName = parts[2].ifBlank { null },
+                    mimeType = parts[3].ifBlank { null },
+                    dateAdded = parts[4].toLongOrNull() ?: 0L,
+                    size = parts[5].toLongOrNull() ?: 0L,
+                )
+            }
         return MediaImageQueryResult(items)
     }
 }

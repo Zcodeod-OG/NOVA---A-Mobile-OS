@@ -6,6 +6,7 @@ import ai.onnxruntime.OrtSession
 import com.nova.runtime.ai.model.ModelAssetPaths
 import com.nova.runtime.ai.model.ModelLoader
 import com.nova.runtime.utils.logging.NovaLogger
+import java.nio.FloatBuffer
 import java.nio.LongBuffer
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
@@ -71,35 +72,16 @@ class OnnxSessionManager(
     fun loadedModelPath(): String? = loadedPath
 }
 
-/** Simple whitespace tokenizer for MVP ONNX embedding models expecting input_ids. */
-object SimpleTokenizer {
-    private const val MAX_TOKENS = 128
-    private const val UNK = 100L
-    private const val CLS = 101L
-    private const val SEP = 102L
-
-    fun encode(text: String, maxLength: Int = MAX_TOKENS): LongArray {
-        val tokens = mutableListOf(CLS)
-        text.trim()
-            .lowercase()
-            .split(Regex("\\s+"))
-            .filter { it.isNotBlank() }
-            .take(maxLength - 2)
-            .forEach { token ->
-                tokens += token.hashCode().toLong().let { if (it < 0) -it else it } % 30_000 + 1_000
-            }
-        tokens += SEP
-        return tokens.toLongArray()
-    }
-
-    fun attentionMask(inputIds: LongArray): LongArray = LongArray(inputIds.size) { 1L }
-
-    fun tokenTypeIds(inputIds: LongArray): LongArray = LongArray(inputIds.size) { 0L }
-}
-
 object OnnxTensorUtils {
     fun createLongTensor(env: OrtEnvironment, values: LongArray, shape: LongArray): OnnxTensor {
         val buffer = LongBuffer.allocate(values.size)
+        buffer.put(values)
+        buffer.rewind()
+        return OnnxTensor.createTensor(env, buffer, shape)
+    }
+
+    fun createFloatTensor(env: OrtEnvironment, values: FloatArray, shape: LongArray): OnnxTensor {
+        val buffer = FloatBuffer.allocate(values.size)
         buffer.put(values)
         buffer.rewind()
         return OnnxTensor.createTensor(env, buffer, shape)
@@ -124,8 +106,14 @@ object OnnxTensorUtils {
             is FloatArray -> value
             is Array<*> -> {
                 @Suppress("UNCHECKED_CAST")
-                val nested = value as Array<FloatArray>
-                nested.firstOrNull() ?: floatArrayOf()
+                when (val first = value.firstOrNull()) {
+                    is FloatArray -> first
+                    is Array<*> -> {
+                        @Suppress("UNCHECKED_CAST")
+                        (first as Array<FloatArray>).firstOrNull() ?: floatArrayOf()
+                    }
+                    else -> floatArrayOf()
+                }
             }
             else -> floatArrayOf()
         }
@@ -139,3 +127,5 @@ internal fun defaultLlmLightFileName(): String = ModelAssetPaths.LLM_LIGHT_MODEL
 internal fun defaultLlmFullFileName(): String = ModelAssetPaths.LLM_FULL_MODEL
 
 internal fun defaultWhisperFileName(): String = ModelAssetPaths.WHISPER_MODEL
+
+internal fun defaultImageEmbeddingFileName(): String = ModelAssetPaths.IMAGE_EMBEDDING_MODEL

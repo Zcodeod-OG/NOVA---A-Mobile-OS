@@ -8,9 +8,10 @@
 
 **Dependencies:**
 
-* TDD v1.0
+* TDD v1.0 ([§22 Model & Tokenizer Pipeline](./TDD.md#22-model--tokenizer-pipeline))
 * Interface & API Specification
-* Data Platform Specification
+* Data Platform Specification ([§9–10 Indexing](./DPS.md#9-file-indexing-pipeline))
+* PRD v2.0 ([§14 Implementation Status](./PRD.md#14-implementation-status))
 
 ---
 
@@ -209,6 +210,74 @@ No raw filesystem assumptions.
 
 ---
 
+## 4.9 Model Asset Delivery
+
+NOVA requires on-device ONNX models for embeddings, speech recognition, and inference. **Models are mandatory for production** — the runtime is a local AI system, not a cloud-assistant proxy (see [PRD §14](./PRD.md#14-implementation-status)).
+
+No user content, queries, or embeddings are sent to a remote inference service.
+
+### Required Models
+
+| Model File | Purpose | Default Tier | Size (approx.) |
+| ---------- | ------- | ------------ | -------------- |
+| `embedding-mini.onnx` | Semantic search (`all-MiniLM-L6-v2`) | Required | ~90 MB |
+| `whisper-tiny.onnx` | Offline voice ASR | Required (default) | ~75 MB |
+| `llm-light.onnx` | Lightweight on-device LLM | Required | ~300 MB |
+| `llm-full.onnx` | Full on-device LLM | Optional profile | ~600 MB |
+
+### Delivery Paths
+
+| Build Type | Delivery Mechanism | Notes |
+| ---------- | ------------------ | ----- |
+| Developer | Manual copy to `assets/models/` or `adb push` to `filesDir/models/` | Documented in app assets README |
+| Internal QA | First-run download from NOVA CDN / artifact bucket | Same code path as production |
+| Play Store | **Play Asset Delivery (PAD)** — `asset-pack` for ONNX models | Keeps base APK under store size limits; models install on first launch or Wi-Fi |
+
+### First-Run Download Flow
+
+```text
+App Launch (first run)
+      ↓
+Check filesDir/models/ for required ONNX files
+      ↓
+Missing? → Model Download Worker (WorkManager, Wi-Fi preferred)
+      ↓
+Verify checksum + model version manifest
+      ↓
+Copy to filesDir/models/
+      ↓
+Initialize OnnxSessionManager
+      ↓
+Resume / start File Indexer (DPS §9)
+      ↓
+Ready — semantic search enabled
+```
+
+* Download runs on `NetworkType.UNMETERED` when possible.
+* User sees progress UI; search features requiring embeddings remain disabled until download completes.
+* Cached models persist across upgrades; version manifest triggers re-download on model update.
+
+### Local Whisper as Default ASR
+
+Offline voice is a [PRD FR-001](./PRD.md#fr-001--voice-interface) requirement.
+
+| Priority | ASR Path | When Used |
+| -------- | -------- | --------- |
+| 1 (production) | `WhisperSpeechRecognizer` + `whisper-tiny.onnx` | Model present; fully offline |
+| 2 (dev only) | `AndroidSpeechRecognizerClient` (platform) | Whisper ONNX missing during development |
+
+Platform speech recognition is a **development convenience**, not a production default. Store builds must ship Whisper via PAD or first-run download before advertising offline voice.
+
+### Model Loader
+
+`AndroidModelLoader` resolves models in order:
+
+1. `context.filesDir/models/` (downloaded or pushed)
+2. `assets/models/` (dev builds with bundled assets)
+3. Absent → feature disabled; dev fallbacks only (never in production paths — [TDD §22.4](./TDD.md#224-production-requirements))
+
+---
+
 # 5. Android Services
 
 The application contains the following services.
@@ -235,11 +304,12 @@ Handles supported UI automation.
 
 ## WorkManager Workers
 
-Background workers:
+Background workers (see [DPS §10](./DPS.md#10-background-workers)):
 
-* File Indexer
-* Embedding Generator
+* File Indexer (full-device + incremental sync)
+* Embedding Generator (requires downloaded ONNX models — §4.9)
 * OCR
+* Model Download Worker (first-run / PAD extraction)
 * Graph Builder
 * Cleanup
 
@@ -304,11 +374,13 @@ Application Start
       ↓
 Runtime Initialization
       ↓
+Model Availability Check (§4.9)
+      ↓
 Capability Discovery
       ↓
 Permission Check
       ↓
-Background Workers Registration
+Background Workers Registration (File Indexer, Model Download)
       ↓
 Ready
 ```
@@ -397,8 +469,11 @@ Included:
 * Calendar
 * AlarmManager
 * Notifications
-* WorkManager
+* WorkManager (indexing + model download)
 * Storage Access Framework
+* First-run model download (**in progress**)
+* Play Asset Delivery for store builds (**planned**)
+* Local Whisper ONNX as default ASR (**in progress**)
 
 Deferred:
 

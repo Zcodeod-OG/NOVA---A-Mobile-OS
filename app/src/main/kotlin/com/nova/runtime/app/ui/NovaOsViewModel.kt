@@ -3,6 +3,10 @@ package com.nova.runtime.app.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nova.runtime.ai.model.ModelAssetPaths
+import com.nova.runtime.ai.model.ModelDownloadManager
+import com.nova.runtime.ai.model.ModelDownloadPhase
+import com.nova.runtime.ai.model.ModelDownloadSessionState
+import com.nova.runtime.ai.model.ModelFilePhase
 import com.nova.runtime.ai.model.ModelLoader
 import com.nova.runtime.app.ui.components.ActivityItem
 import com.nova.runtime.conversation.speech.SpeechRecognizer
@@ -33,6 +37,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -41,6 +46,7 @@ class NovaOsViewModel(
     private val eventBus: EventBus,
     private val speechRecognizer: SpeechRecognizer,
     private val modelLoader: ModelLoader,
+    private val modelDownloadManager: ModelDownloadManager,
     private val lifecycleManager: LifecycleManager,
 ) : ViewModel() {
 
@@ -62,6 +68,14 @@ class NovaOsViewModel(
     private val _whisperAvailable = MutableStateFlow(false)
     val whisperAvailable: StateFlow<Boolean> = _whisperAvailable.asStateFlow()
 
+    val modelDownloadState: StateFlow<ModelDownloadSessionState> = modelDownloadManager.state
+
+    private val _modelsReadyForHeavyInference = MutableStateFlow(false)
+    val modelsReadyForHeavyInference: StateFlow<Boolean> = _modelsReadyForHeavyInference.asStateFlow()
+
+    private var lastLoggedDownloadPhase: ModelDownloadPhase? = null
+    private val loggedFilePhases = mutableSetOf<String>()
+
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
         .withZone(ZoneId.systemDefault())
 
@@ -73,8 +87,97 @@ class NovaOsViewModel(
         seedBootEvents()
         viewModelScope.launch {
             replayMissedRuntimeEvents()
+            observeModelDownloads()
             withContext(Dispatchers.IO) {
                 reportModelAvailability()
+            }
+        }
+    }
+
+    fun retryModelDownloads() {
+        viewModelScope.launch(Dispatchers.IO) {
+            loggedFilePhases.clear()
+            lastLoggedDownloadPhase = null
+            prependActivity(
+                ActivityItem(
+                    timestamp = now(),
+                    source = "MODELS",
+                    message = "Retrying missing ONNX model downloads…",
+                ),
+            )
+            modelDownloadManager.ensureAllModels()
+        }
+    }
+
+    private fun observeModelDownloads() {
+        viewModelScope.launch {
+            modelDownloadManager.state.collectLatest { session ->
+                syncReadinessFromSession(session)
+                logDownloadSession(session)
+            }
+        }
+    }
+
+    private fun syncReadinessFromSession(session: ModelDownloadSessionState) {
+        _whisperAvailable.value = session.readiness.prefersLocalWhisper
+        _modelsReadyForHeavyInference.value = session.readiness.canRunHeavyInference
+
+        _voiceStatusMessage.value = when {
+            session.readiness.prefersLocalWhisper -> null
+            session.phase == ModelDownloadPhase.DOWNLOADING &&
+                session.files.any { it.fileName == ModelAssetPaths.WHISPER_MODEL && it.phase == ModelFilePhase.DOWNLOADING } ->
+                "Downloading whisper-tiny.onnx for offline voice…"
+            else ->
+                "Whisper ONNX not installed — MIC uses device speech recognition (explicit fallback)."
+        }
+    }
+
+    private fun logDownloadSession(session: ModelDownloadSessionState) {
+        if (session.phase != lastLoggedDownloadPhase &&
+            session.phase != ModelDownloadPhase.IDLE
+        ) {
+            session.message?.let { message ->
+                prependActivity(
+                    ActivityItem(
+                        timestamp = now(),
+                        source = "MODELS",
+                        message = message,
+                        isAlert = session.phase == ModelDownloadPhase.COMPLETE,
+                    ),
+                )
+            }
+            lastLoggedDownloadPhase = session.phase
+        }
+
+        session.files.forEach { file ->
+            val key = "${file.fileName}:${file.phase}"
+            if (key in loggedFilePhases) return@forEach
+
+            when (file.phase) {
+                ModelFilePhase.COMPLETE -> {
+                    val sizeMb = file.bytesDownloaded / (1024 * 1024)
+                    prependActivity(
+                        ActivityItem(
+                            timestamp = now(),
+                            source = "MODELS",
+                            message = "${file.fileName} ready (${sizeMb} MB)",
+                            isAlert = true,
+                        ),
+                    )
+                    loggedFilePhases.add(key)
+                }
+                ModelFilePhase.FAILED -> {
+                    prependActivity(
+                        ActivityItem(
+                            timestamp = now(),
+                            source = "MODELS",
+                            message = "${file.fileName} failed: ${file.errorMessage ?: "unknown error"}",
+                            isAlert = true,
+                        ),
+                    )
+                    loggedFilePhases.add(key)
+                }
+                else -> Unit
             }
         }
     }
@@ -85,9 +188,10 @@ class NovaOsViewModel(
             val sizeMb = model.sizeBytes / (1024 * 1024)
             if (model.fileName == ModelAssetPaths.WHISPER_MODEL) {
                 _whisperAvailable.value = model.available
-                if (!model.available) {
-                    _voiceStatusMessage.value =
-                        "Whisper ONNX not installed — MIC uses device speech recognition."
+            }
+            if (model.fileName == ModelAssetPaths.LLM_LIGHT_MODEL || model.fileName == ModelAssetPaths.LLM_FULL_MODEL) {
+                if (model.available) {
+                    _modelsReadyForHeavyInference.value = true
                 }
             }
             prependActivity(
@@ -96,8 +200,10 @@ class NovaOsViewModel(
                     source = "MODELS",
                     message = if (model.available) {
                         "${model.fileName} available (${sizeMb} MB)"
+                    } else if (model.fileName in ModelAssetPaths.REMOTE_DOWNLOAD) {
+                        "${model.fileName} pending download"
                     } else {
-                        "${model.fileName} missing (optional fallback active)"
+                        "${model.fileName} missing — add to assets/models/"
                     },
                     isAlert = model.available,
                 ),
@@ -156,7 +262,7 @@ class NovaOsViewModel(
 
             if (transcript.isNullOrBlank() || isStubTranscript(transcript)) {
                 _voiceStatusMessage.value =
-                    "Could not transcribe audio. Add whisper-tiny.onnx to assets/models/ or type your command."
+                    "Could not transcribe audio. Download whisper-tiny.onnx or type your command."
                 prependActivity(
                     ActivityItem(
                         timestamp = now(),
@@ -195,6 +301,17 @@ class NovaOsViewModel(
 
     private suspend fun processCommand(command: String) {
         commandMutex.withLock {
+            val downloadState = modelDownloadState.value
+            if (downloadState.isActive && !downloadState.readiness.canRunHeavyInference) {
+                prependActivity(
+                    ActivityItem(
+                        timestamp = now(),
+                        source = "MODELS",
+                        message = "On-device LLM still downloading — using lightweight fallbacks for this command.",
+                    ),
+                )
+            }
+
             _isProcessing.value = true
             val traceId = UUID.randomUUID()
             prependActivity(

@@ -2,6 +2,9 @@ package com.nova.runtime.ai.native.search
 
 import com.nova.runtime.ai.model.EmbeddingGenerator
 import com.nova.runtime.ai.model.EmbeddingResult
+import com.nova.runtime.ai.model.ImageEmbeddingGenerator
+import com.nova.runtime.ai.native.indexing.EmbeddingMetadata
+import com.nova.runtime.ai.native.ingestion.FullDeviceIndexer
 import com.nova.runtime.ai.native.ingestion.MediaStoreIngestionService
 import com.nova.runtime.ai.native.storage.CosineVectorIndex
 import com.nova.runtime.models.RuntimeModule
@@ -18,11 +21,13 @@ import kotlin.system.measureTimeMillis
 /** Semantic KNN search over indexed photo and document embeddings (DPS §7). */
 class SemanticSearchService(
     private val embeddingGenerator: EmbeddingGenerator,
+    private val imageEmbeddingGenerator: ImageEmbeddingGenerator,
     private val vectorIndex: CosineVectorIndex,
     private val photoRepository: PhotoRepository,
     private val documentRepository: DocumentRepository,
     private val searchIndexPipeline: SearchIndexPipeline,
     private val mediaStoreIngestionService: MediaStoreIngestionService,
+    private val fullDeviceIndexer: FullDeviceIndexer? = null,
     private val logger: NovaLogger,
 ) {
     suspend fun search(
@@ -35,7 +40,7 @@ class SemanticSearchService(
 
         val latencyMs = measureTimeMillis {
             if (request.indexOnQuery) {
-                mediaStoreIngestionService.ensureSynced()
+                fullDeviceIndexer?.runPrioritySync() ?: mediaStoreIngestionService.ensureSynced()
                 searchIndexPipeline.ensureIndexed(
                     SearchIndexPipeline.IndexRequest(
                         indexPhotos = OBJECT_TYPE_PHOTO in objectTypes,
@@ -44,15 +49,8 @@ class SemanticSearchService(
                 )
             }
 
-            val queryVector = embedQuery(normalizedQuery, traceId) ?: return@measureTimeMillis
             val fetchK = (request.offset + request.limit).coerceAtMost(SearchRequest.MAX_LIMIT)
-            val rawHits = vectorIndex.search(
-                VectorSearchRequest(
-                    queryVector = queryVector,
-                    k = fetchK.coerceAtLeast(1),
-                ),
-            ).filter { hit -> hit.objectType in objectTypes }
-
+            val rawHits = searchIndexedObjects(normalizedQuery, traceId, objectTypes, fetchK)
             val hits = rawHits
                 .drop(request.offset)
                 .take(request.limit)
@@ -83,13 +81,84 @@ class SemanticSearchService(
         return page
     }
 
-    private suspend fun embedQuery(query: String, traceId: UUID): FloatArray? =
+    private suspend fun searchIndexedObjects(
+        query: String,
+        traceId: UUID,
+        objectTypes: Set<String>,
+        fetchK: Int,
+    ): List<RankedObjectHit> {
+        if (query.isBlank()) return emptyList()
+
+        val hits = mutableListOf<RankedObjectHit>()
+        val k = fetchK.coerceAtLeast(1)
+
+        if (OBJECT_TYPE_DOCUMENT in objectTypes) {
+            embedTextQuery(query, traceId)?.let { queryVector ->
+                hits += vectorIndex.search(
+                    VectorSearchRequest(
+                        queryVector = queryVector,
+                        k = k,
+                        metadataFilter = mapOf(EmbeddingMetadata.OBJECT_TYPE to OBJECT_TYPE_DOCUMENT),
+                    ),
+                ).map { RankedObjectHit(it.objectId, it.objectType, it.score) }
+            }
+        }
+
+        if (OBJECT_TYPE_PHOTO in objectTypes) {
+            embedImageQuery(query, traceId)?.let { queryVector ->
+                hits += vectorIndex.search(
+                    VectorSearchRequest(
+                        queryVector = queryVector,
+                        k = k,
+                        metadataFilter = mapOf(
+                            EmbeddingMetadata.OBJECT_TYPE to OBJECT_TYPE_PHOTO,
+                            EmbeddingMetadata.EMBEDDING_KIND to EmbeddingMetadata.KIND_IMAGE,
+                        ),
+                    ),
+                ).map { RankedObjectHit(it.objectId, it.objectType, it.score) }
+            }
+
+            embedTextQuery(query, traceId)?.let { queryVector ->
+                hits += vectorIndex.search(
+                    VectorSearchRequest(
+                        queryVector = queryVector,
+                        k = k,
+                        metadataFilter = mapOf(
+                            EmbeddingMetadata.OBJECT_TYPE to OBJECT_TYPE_PHOTO,
+                            EmbeddingMetadata.EMBEDDING_KIND to EmbeddingMetadata.KIND_OCR,
+                        ),
+                    ),
+                ).map { RankedObjectHit(it.objectId, it.objectType, it.score) }
+            }
+        }
+
+        return hits
+            .groupBy { it.objectId to it.objectType }
+            .map { (_, grouped) -> grouped.maxBy { it.score } }
+            .sortedByDescending { it.score }
+            .take(k)
+    }
+
+    private suspend fun embedTextQuery(query: String, traceId: UUID): FloatArray? =
         when (val result = embeddingGenerator.embed(query)) {
             is EmbeddingResult.Success -> result.vector
             is EmbeddingResult.Failure -> {
                 logger.warn(
                     module = RuntimeModule.STORAGE.name,
                     message = "Query embedding failed: ${result.message}",
+                    traceId = traceId,
+                )
+                null
+            }
+        }
+
+    private suspend fun embedImageQuery(query: String, traceId: UUID): FloatArray? =
+        when (val result = imageEmbeddingGenerator.embedQuery(query)) {
+            is EmbeddingResult.Success -> result.vector
+            is EmbeddingResult.Failure -> {
+                logger.warn(
+                    module = RuntimeModule.STORAGE.name,
+                    message = "Image query embedding failed: ${result.message}",
                     traceId = traceId,
                 )
                 null
@@ -133,6 +202,12 @@ class SemanticSearchService(
             limit = request.limit,
             offset = request.offset,
         )
+
+    private data class RankedObjectHit(
+        val objectId: UUID,
+        val objectType: String,
+        val score: Float,
+    )
 
     companion object {
         const val OBJECT_TYPE_PHOTO = SearchIndexPipeline.OBJECT_TYPE_PHOTO

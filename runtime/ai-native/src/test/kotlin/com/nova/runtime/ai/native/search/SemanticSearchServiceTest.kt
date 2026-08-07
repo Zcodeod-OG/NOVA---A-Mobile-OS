@@ -3,10 +3,14 @@ package com.nova.runtime.ai.native.search
 import com.nova.runtime.ai.model.EmbeddingGenerator
 import com.nova.runtime.ai.model.EmbeddingResult
 import com.nova.runtime.ai.model.HashEmbeddingGenerator
+import com.nova.runtime.ai.model.HashImageEmbeddingGenerator
+import com.nova.runtime.ai.model.ImageEmbeddingGenerator
 import com.nova.runtime.ai.model.OcrEngine
 import com.nova.runtime.ai.model.OcrResult
 import com.nova.runtime.ai.native.indexing.EmbeddingIndexer
+import com.nova.runtime.ai.native.indexing.EmbeddingMetadata
 import com.nova.runtime.ai.native.ingestion.MediaStoreIngestionService
+import com.nova.runtime.ai.native.ingestion.PhotoImageLoader
 import com.nova.runtime.ai.native.storage.CosineVectorIndex
 import com.nova.runtime.storage.dao.DocumentDao
 import com.nova.runtime.storage.dao.PhotoDao
@@ -17,8 +21,6 @@ import com.nova.runtime.storage.repository.EmbeddingRepository
 import com.nova.runtime.storage.repository.PhotoRepository
 import com.nova.runtime.storage.search.SearchRequest
 import com.nova.runtime.utils.logging.NoOpRuntimeLogger
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -34,9 +36,9 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class SemanticSearchServiceTest {
-    private lateinit var context: Context
     private lateinit var vectorIndex: CosineVectorIndex
     private lateinit var embeddingGenerator: EmbeddingGenerator
+    private lateinit var imageEmbeddingGenerator: ImageEmbeddingGenerator
     private lateinit var photoRepository: FakePhotoRepository
     private lateinit var documentRepository: FakeDocumentRepository
     private lateinit var embeddingRepository: FakeEmbeddingRepository
@@ -44,14 +46,15 @@ class SemanticSearchServiceTest {
 
     @Before
     fun setUp() {
-        context = ApplicationProvider.getApplicationContext()
         vectorIndex = CosineVectorIndex()
         embeddingGenerator = HashEmbeddingGenerator(dimension = 32)
+        imageEmbeddingGenerator = HashImageEmbeddingGenerator(dimension = 32)
         photoRepository = FakePhotoRepository()
         documentRepository = FakeDocumentRepository()
         embeddingRepository = FakeEmbeddingRepository()
         val indexer = EmbeddingIndexer(
             embeddingGenerator = embeddingGenerator,
+            imageEmbeddingGenerator = imageEmbeddingGenerator,
             embeddingRepository = embeddingRepository,
             vectorIndex = vectorIndex,
             ocrEngine = StubOcrEngine(),
@@ -62,26 +65,30 @@ class SemanticSearchServiceTest {
             documentDao = FakeDocumentDao(documentRepository),
             photoRepository = photoRepository,
             documentRepository = documentRepository,
+            photoImageLoader = PhotoImageLoader { null },
         )
         val ingestionService = MediaStoreIngestionService(
             mediaStoreQuery = com.nova.runtime.storage.search.NoOpMediaStoreQueryPort(),
             downloadsQuery = com.nova.runtime.storage.search.NoOpDownloadsQueryPort(),
+            documentsQuery = com.nova.runtime.storage.search.NoOpDocumentsQueryPort(),
             photoDao = FakePhotoDao(photoRepository),
             documentDao = FakeDocumentDao(documentRepository),
             photoRepository = photoRepository,
             documentRepository = documentRepository,
             embeddingIndexer = indexer,
             searchIndexPipeline = pipeline,
-            context = context,
+            photoImageLoader = PhotoImageLoader { null },
             logger = NoOpRuntimeLogger(),
         )
         service = SemanticSearchService(
             embeddingGenerator = embeddingGenerator,
+            imageEmbeddingGenerator = imageEmbeddingGenerator,
             vectorIndex = vectorIndex,
             photoRepository = photoRepository,
             documentRepository = documentRepository,
             searchIndexPipeline = pipeline,
             mediaStoreIngestionService = ingestionService,
+            fullDeviceIndexer = null,
             logger = NoOpRuntimeLogger(),
         )
     }
@@ -95,7 +102,7 @@ class SemanticSearchServiceTest {
             photoRepository.records[beachId] = samplePhoto(beachId, "sunset beach photo", "content://photo/beach")
 
             indexText(invoiceId, "document", "Quarterly Invoice financial report")
-            indexText(beachId, "photo", "sunset beach vacation")
+            indexText(beachId, "photo", "sunset beach vacation", EmbeddingMetadata.KIND_OCR)
 
             val page = service.search(
                 request = SearchRequest(query = "invoice financial", limit = 5),
@@ -104,6 +111,27 @@ class SemanticSearchServiceTest {
 
             assertTrue(page.count >= 1)
             assertEquals("document", page.items.first().objectType)
+        }
+
+    @Test
+    fun search_findsPhotoWithoutOcr_viaImageEmbedding() =
+        runTest {
+            val mountainId = UUID.randomUUID()
+            val visualConcept = "snowy mountain peak"
+            photoRepository.records[mountainId] =
+                samplePhoto(mountainId, ocrText = null, uri = "content://photo/mountain")
+
+            indexImage(mountainId, visualConcept.toByteArray())
+
+            val page = service.search(
+                request = SearchRequest(query = visualConcept, limit = 5, indexOnQuery = false),
+                traceId = UUID.randomUUID(),
+                objectTypes = setOf(SemanticSearchService.OBJECT_TYPE_PHOTO),
+            )
+
+            assertEquals(1, page.count)
+            assertEquals(mountainId, page.items.first().objectId)
+            assertEquals("photo", page.items.first().objectType)
         }
 
     @Test
@@ -117,7 +145,12 @@ class SemanticSearchServiceTest {
             assertEquals(0, page.count)
         }
 
-    private suspend fun indexText(objectId: UUID, objectType: String, text: String) {
+    private suspend fun indexText(
+        objectId: UUID,
+        objectType: String,
+        text: String,
+        embeddingKind: String? = null,
+    ) {
         val result = embeddingGenerator.embed(text) as EmbeddingResult.Success
         val embeddingId = UUID.randomUUID()
         embeddingRepository.insert(
@@ -133,9 +166,36 @@ class SemanticSearchServiceTest {
         vectorIndex.insert(
             embeddingId = embeddingId,
             vector = result.vector,
+            metadata = buildMap {
+                put(EmbeddingMetadata.OBJECT_ID, objectId.toString())
+                put(EmbeddingMetadata.OBJECT_TYPE, objectType)
+                if (embeddingKind != null) {
+                    put(EmbeddingMetadata.EMBEDDING_KIND, embeddingKind)
+                }
+            },
+        )
+    }
+
+    private suspend fun indexImage(objectId: UUID, imageBytes: ByteArray) {
+        val result = imageEmbeddingGenerator.embedImage(imageBytes) as EmbeddingResult.Success
+        val embeddingId = UUID.randomUUID()
+        embeddingRepository.insert(
+            com.nova.runtime.storage.entities.EmbeddingEntity(
+                embeddingId = embeddingId,
+                objectType = "photo",
+                objectId = objectId,
+                modelVersion = result.modelVersion,
+                dimension = result.dimension,
+                createdAt = System.currentTimeMillis(),
+            ),
+        )
+        vectorIndex.insert(
+            embeddingId = embeddingId,
+            vector = result.vector,
             metadata = mapOf(
-                "objectId" to objectId.toString(),
-                "objectType" to objectType,
+                EmbeddingMetadata.OBJECT_ID to objectId.toString(),
+                EmbeddingMetadata.OBJECT_TYPE to "photo",
+                EmbeddingMetadata.EMBEDDING_KIND to EmbeddingMetadata.KIND_IMAGE,
             ),
         )
     }
@@ -157,7 +217,7 @@ class SemanticSearchServiceTest {
             importance = 0,
         )
 
-    private fun samplePhoto(id: UUID, ocrText: String, uri: String): PhotoEntity =
+    private fun samplePhoto(id: UUID, ocrText: String?, uri: String): PhotoEntity =
         PhotoEntity(
             id = id,
             uri = uri,
@@ -243,6 +303,8 @@ class SemanticSearchServiceTest {
         override suspend fun listRecent(limit: Int) = repository.records.values.take(limit)
         override suspend fun listUnindexedWithOcr(limit: Int) =
             repository.records.values.filter { it.embeddingId == null && !it.ocrText.isNullOrBlank() }.take(limit)
+        override suspend fun listUnindexed(limit: Int) =
+            repository.records.values.filter { it.embeddingId == null }.take(limit)
     }
 
     private class FakeDocumentDao(

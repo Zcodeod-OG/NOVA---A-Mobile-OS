@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Download whisper-tiny ONNX for offline voice commands.
+#
+# NOVA uses local Whisper ASR — this model is required for offline voice.
+# Not committed to git (~40 MB). Same URL used by first-run download on device.
+# See MODEL_SETUP.md for full onboarding.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

@@ -1,6 +1,8 @@
 package com.nova.runtime.ai.native.search.di
 
 import com.nova.runtime.ai.native.indexing.EmbeddingIndexer
+import com.nova.runtime.ai.native.ingestion.FullDeviceIndexer
+import com.nova.runtime.ai.native.ingestion.IndexingCheckpointStore
 import com.nova.runtime.ai.native.ingestion.MediaStoreIngestionService
 import com.nova.runtime.ai.native.search.SearchIndexPipeline
 import com.nova.runtime.ai.native.search.SemanticSearchService
@@ -30,20 +32,33 @@ val searchModule = module {
             documentDao = get(),
             photoRepository = get(),
             documentRepository = get(),
+            photoImageLoader = get(),
         )
     }
+
+    single { IndexingCheckpointStore(androidContext()) }
 
     single {
         MediaStoreIngestionService(
             mediaStoreQuery = get(),
             downloadsQuery = get(),
+            documentsQuery = get(),
             photoDao = get(),
             documentDao = get(),
             photoRepository = get(),
             documentRepository = get(),
             embeddingIndexer = get(),
             searchIndexPipeline = get(),
-            context = androidContext(),
+            photoImageLoader = get(),
+            logger = get(),
+        )
+    }
+
+    single {
+        FullDeviceIndexer(
+            ingestionService = get(),
+            checkpointStore = get(),
+            eventBus = get(),
             logger = get(),
         )
     }
@@ -51,11 +66,13 @@ val searchModule = module {
     single {
         SemanticSearchService(
             embeddingGenerator = get(),
+            imageEmbeddingGenerator = get(),
             vectorIndex = get(),
             photoRepository = get(),
             documentRepository = get(),
             searchIndexPipeline = get(),
             mediaStoreIngestionService = get(),
+            fullDeviceIndexer = get(),
             logger = get(),
         )
     }

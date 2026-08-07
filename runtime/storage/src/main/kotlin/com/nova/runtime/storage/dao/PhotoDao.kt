@@ -60,4 +60,14 @@ interface PhotoDao {
         """,
     )
     suspend fun listUnindexedWithOcr(limit: Int): List<PhotoEntity>
+
+    @Query(
+        """
+        SELECT * FROM photos
+        WHERE embeddingId IS NULL
+        ORDER BY takenAt DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun listUnindexed(limit: Int): List<PhotoEntity>
 }

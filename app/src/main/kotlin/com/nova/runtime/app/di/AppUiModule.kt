@@ -8,5 +8,5 @@ import org.koin.dsl.module
 
 val appUiModule = module {
     single<ConversationResponseGenerator> { OrchestratorConversationResponseGenerator(get()) }
-    viewModel { NovaOsViewModel(get(), get(), get(), get(), get()) }
+    viewModel { NovaOsViewModel(get(), get(), get(), get(), get(), get()) }
 }

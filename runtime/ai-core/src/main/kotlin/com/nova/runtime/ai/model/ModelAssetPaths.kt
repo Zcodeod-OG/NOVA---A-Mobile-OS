@@ -8,16 +8,38 @@ package com.nova.runtime.ai.model
  */
 object ModelAssetPaths {
     const val EMBEDDING_MODEL = "embedding-mini.onnx"
+    const val EMBEDDING_VOCAB = "vocab.txt"
     const val LLM_LIGHT_MODEL = "llm-light.onnx"
     const val LLM_FULL_MODEL = "llm-full.onnx"
     const val WHISPER_MODEL = "whisper-tiny.onnx"
+
+    /**
+     * MobileCLIP-S0 image encoder ONNX export (~15 MB).
+     * Input: pixel_values float32 [1, 3, 224, 224] NCHW, ImageNet-normalized RGB.
+     * Output: image_embeds float32 [1, 512] (L2-normalized by runtime if needed).
+     * Download/conversion owned by Agent 2 — not bundled in MVP assets.
+     */
+    const val IMAGE_EMBEDDING_MODEL = "image-encoder-mobileclip-s0.onnx"
 
     const val EMBEDDING_MODEL_VERSION = "all-MiniLM-L6-v2-onnx"
     const val LLM_LIGHT_MODEL_VERSION = "llm-light-onnx-v1"
     const val LLM_FULL_MODEL_VERSION = "llm-full-onnx-v1"
     const val WHISPER_MODEL_VERSION = "whisper-tiny-onnx-v1"
+    const val IMAGE_EMBEDDING_MODEL_VERSION = "mobileclip-s0-image-onnx-v1"
 
     const val DEFAULT_EMBEDDING_DIMENSION = 384
+    const val DEFAULT_IMAGE_EMBEDDING_DIMENSION = 512
+    const val IMAGE_EMBEDDING_INPUT_SIZE = 224
+
+    /** Classpath / test resource path for all-MiniLM-L6-v2 vocab. */
+    const val TOKENIZER_VOCAB = "tokenizer/vocab.txt"
+
+    /** Android assets path for MiniLM vocab (under `app/src/main/assets/`). */
+    const val TOKENIZER_VOCAB_ASSET = "tokenizer/vocab.txt"
+
+    const val TOKENIZER_CONFIG_ASSET = "tokenizer/tokenizer_config.json"
+
+    const val TOKENIZER_SPECIAL_TOKENS_ASSET = "tokenizer/special_tokens_map.json"
 
     val ALL_REQUIRED = listOf(
         EMBEDDING_MODEL,
@@ -25,6 +47,19 @@ object ModelAssetPaths {
         LLM_FULL_MODEL,
         WHISPER_MODEL,
     )
+
+    /** Bundled in APK assets — copied to filesDir on first run. */
+    val ASSET_BUNDLED = listOf(EMBEDDING_MODEL)
+
+    /** Fetched over HTTP on first run when network is available. */
+    val REMOTE_DOWNLOAD = listOf(
+        WHISPER_MODEL,
+        LLM_LIGHT_MODEL,
+        LLM_FULL_MODEL,
+    )
+
+    /** Optional vision models — hash fallback used when absent. */
+    val ALL_OPTIONAL = listOf(IMAGE_EMBEDDING_MODEL)
 }
 
 data class ModelLoadConfig(
