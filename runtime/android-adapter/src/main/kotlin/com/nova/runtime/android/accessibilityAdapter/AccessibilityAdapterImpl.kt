@@ -1,6 +1,8 @@
 package com.nova.runtime.android.accessibilityAdapter
 
+import android.os.Build
 import android.view.accessibility.AccessibilityNodeInfo
+import com.nova.runtime.android.internal.AccessibilityOperationTimeoutException
 import com.nova.runtime.android.internal.AdapterBoundary
 import com.nova.runtime.android.internal.AdapterErrorMapper
 import com.nova.runtime.models.contracts.CapabilityResult
@@ -9,7 +11,6 @@ import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import com.nova.runtime.android.internal.AccessibilityOperationTimeoutException
 
 class AccessibilityAdapterImpl(
     private val bridge: AccessibilityServiceBridge,
@@ -61,9 +62,20 @@ class AccessibilityAdapterImpl(
         val node =
             findNode(service, parameters)
                 ?: throw IllegalArgumentException("Node not found for click")
-        val clicked = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        if (!clicked) throw IllegalStateException("Click action failed")
-        return mapOf("status" to "clicked")
+        var current: AccessibilityNodeInfo? = node
+        while (current != null) {
+            if (current.isClickable &&
+                current.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            ) {
+                return mapOf("status" to "clicked")
+            }
+            current = current.parent
+        }
+        // Last resort: try the matched node even if not marked clickable.
+        if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+            return mapOf("status" to "clicked")
+        }
+        throw IllegalStateException("Click action failed")
     }
 
     private fun inputText(parameters: Map<String, String>): Map<String, String> {
@@ -120,6 +132,7 @@ class AccessibilityAdapterImpl(
                 node.className?.toString().orEmpty(),
                 node.viewIdResourceName.orEmpty(),
                 node.text?.toString().orEmpty(),
+                node.contentDescription?.toString().orEmpty(),
             ).joinToString(":"),
         )
         for (i in 0 until node.childCount) {
@@ -135,7 +148,7 @@ class AccessibilityAdapterImpl(
         val root = service.rootInActiveWindow ?: throw IllegalStateException("No active window")
         return mapOf(
             "packageName" to (root.packageName?.toString() ?: ""),
-            "className" to (root.className?.toString() ?: ""),
+            "className" to (root.className?.toString().orEmpty()),
             "childCount" to root.childCount.toString(),
         )
     }
@@ -144,21 +157,120 @@ class AccessibilityAdapterImpl(
         service: NovaAccessibilityService,
         parameters: Map<String, String>,
     ): AccessibilityNodeInfo? {
-        parameters["viewId"]?.let { viewId ->
-            val nodes = service.rootInActiveWindow?.findAccessibilityNodeInfosByViewId(viewId)
-            return nodes?.firstOrNull()
+        val packageFilter = parameters["packageName"]
+            ?.split(',')
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.toSet()
+            .orEmpty()
+        val roots = windowRoots(service, packageFilter)
+        if (roots.isEmpty()) return null
+
+        parameters["viewId"]?.takeIf { it.isNotBlank() }?.let { viewId ->
+            for (root in roots) {
+                val nodes = root.findAccessibilityNodeInfosByViewId(viewId)
+                pickBestClickTarget(nodes)?.let { return it }
+            }
         }
-        parameters["text"]?.let { text ->
-            val nodes = service.rootInActiveWindow?.findAccessibilityNodeInfosByText(text)
-            return nodes?.firstOrNull()
+
+        val contentDescription = parameters["contentDescription"]?.takeIf { it.isNotBlank() }
+        val text = parameters["text"]?.takeIf { it.isNotBlank() }
+        val labels = listOfNotNull(contentDescription, text)
+        for (label in labels) {
+            for (root in roots) {
+                val byText = root.findAccessibilityNodeInfosByText(label)
+                pickBestClickTarget(byText, preferredLabel = label)?.let { return it }
+                findByContentDescription(root, label)?.let { return it }
+            }
         }
-        return service.rootInActiveWindow
+
+        if (parameters["viewId"].isNullOrBlank() && labels.isEmpty()) {
+            return roots.firstOrNull()
+        }
+        return null
+    }
+
+    private fun windowRoots(
+        service: NovaAccessibilityService,
+        packageFilter: Set<String>,
+    ): List<AccessibilityNodeInfo> {
+        val roots = LinkedHashMap<Int, AccessibilityNodeInfo>()
+        fun consider(root: AccessibilityNodeInfo?) {
+            if (root == null) return
+            val pkg = root.packageName?.toString().orEmpty()
+            if (packageFilter.isNotEmpty() && pkg !in packageFilter) return
+            roots.putIfAbsent(System.identityHashCode(root), root)
+        }
+
+        consider(service.rootInActiveWindow)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            service.windows?.forEach { window ->
+                consider(window.root)
+            }
+        }
+        return roots.values.toList()
+    }
+
+    private fun findByContentDescription(
+        root: AccessibilityNodeInfo,
+        label: String,
+    ): AccessibilityNodeInfo? {
+        val match = label.trim()
+        if (match.isEmpty()) return null
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var best: AccessibilityNodeInfo? = null
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            val desc = node.contentDescription?.toString()?.trim().orEmpty()
+            if (desc.equals(match, ignoreCase = true) ||
+                desc.contains(match, ignoreCase = true)
+            ) {
+                if (node.isClickable) return node
+                if (best == null) best = node
+            }
+            for (i in 0 until node.childCount) {
+                node.getChild(i)?.let(queue::add)
+            }
+        }
+        return best?.let { climbToClickable(it) ?: it }
+    }
+
+    private fun pickBestClickTarget(
+        nodes: List<AccessibilityNodeInfo>?,
+        preferredLabel: String? = null,
+    ): AccessibilityNodeInfo? {
+        if (nodes.isNullOrEmpty()) return null
+        val preferred = preferredLabel?.trim().orEmpty()
+        val exact =
+            if (preferred.isNotEmpty()) {
+                nodes.firstOrNull { node ->
+                    node.contentDescription?.toString().equals(preferred, ignoreCase = true) ||
+                        node.text?.toString().equals(preferred, ignoreCase = true)
+                }
+            } else {
+                null
+            }
+        val ordered = listOfNotNull(exact) + nodes.filter { it != exact }
+        for (node in ordered) {
+            if (node.isClickable) return node
+            climbToClickable(node)?.let { return it }
+        }
+        return ordered.firstOrNull()
+    }
+
+    private fun climbToClickable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        var current: AccessibilityNodeInfo? = node.parent
+        while (current != null) {
+            if (current.isClickable) return current
+            current = current.parent
+        }
+        return null
     }
 
     private fun Map<String, String>.require(key: String): String =
         this[key]?.takeIf { it.isNotBlank() }
             ?: throw IllegalArgumentException("Missing required parameter: $key")
-
 
     private companion object {
         const val ADAPTER_NAME = "Accessibility"

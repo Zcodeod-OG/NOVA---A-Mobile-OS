@@ -5,6 +5,7 @@ import com.nova.runtime.events.RuntimeEvent
 import com.nova.runtime.events.storage.StorageEvents
 import com.nova.runtime.models.EventPriority
 import com.nova.runtime.models.RuntimeModule
+import com.nova.runtime.storage.dao.DocumentDao
 import com.nova.runtime.utils.logging.NovaLogger
 import java.util.UUID
 import kotlinx.coroutines.sync.Mutex
@@ -19,6 +20,7 @@ class FullDeviceIndexer(
     private val checkpointStore: IndexingCheckpointStore,
     private val eventBus: EventBus,
     private val logger: NovaLogger,
+    private val documentDao: DocumentDao? = null,
 ) {
     private val batchMutex = Mutex()
 
@@ -27,14 +29,6 @@ class FullDeviceIndexer(
             val category = checkpointStore.getCurrentCategory()
             val offset = checkpointStore.getOffset(category)
             val traceId = UUID.randomUUID()
-
-            publishProgress(
-                traceId = traceId,
-                category = category,
-                message = "Indexing ${category.name.lowercase()}…",
-                indexedInBatch = 0,
-                offset = offset,
-            )
 
             val itemResult =
                 when (category) {
@@ -62,6 +56,8 @@ class FullDeviceIndexer(
 
             ingestionService.indexPendingEmbeddings(batchSize)
 
+            val summaryStats = loadSummaryStats()
+            val hasMore = hasMoreInCategory || checkpointStore.getCurrentCategory() != category
             val result =
                 BatchResult(
                     category = category,
@@ -69,8 +65,11 @@ class FullDeviceIndexer(
                     skipped = itemResult.skipped,
                     queried = itemResult.queried,
                     totalIndexed = checkpointStore.getTotalIndexed(),
-                    hasMore = hasMoreInCategory || checkpointStore.getCurrentCategory() != category,
+                    hasMore = hasMore,
                     offset = checkpointStore.getOffset(checkpointStore.getCurrentCategory()),
+                    summariesReady = summaryStats.ready,
+                    summariesPending = summaryStats.pending,
+                    documentsTotal = summaryStats.total,
                 )
 
             publishProgress(
@@ -79,6 +78,8 @@ class FullDeviceIndexer(
                 message = buildProgressMessage(result),
                 indexedInBatch = itemResult.ingested,
                 offset = result.offset,
+                summaryStats = summaryStats,
+                hasMore = hasMore,
             )
 
             logger.info(
@@ -93,6 +94,8 @@ class FullDeviceIndexer(
                         "queried" to itemResult.queried.toString(),
                         "totalIndexed" to result.totalIndexed.toString(),
                         "hasMore" to result.hasMore.toString(),
+                        "summariesReady" to summaryStats.ready.toString(),
+                        "summariesPending" to summaryStats.pending.toString(),
                     ),
             )
             result
@@ -100,12 +103,37 @@ class FullDeviceIndexer(
 
     /** Runs small priority batches so search-on-query stays responsive. */
     suspend fun runPrioritySync(batchSize: Int = PRIORITY_BATCH_SIZE): IngestionSummary {
+        // Force Downloads + Files before search so "mess menu" PDFs are visible immediately.
         val photos = ingestionService.ingestPhotos(batchSize, offset = 0)
-        val documents = ingestionService.ingestDownloads(batchSize, offset = 0)
+        val downloads = ingestionService.ingestDownloads(batchSize, offset = 0)
+        val files = ingestionService.ingestFiles(batchSize, offset = 0)
         ingestionService.indexPendingEmbeddings(batchSize)
+        val documentsIngested = downloads.ingested + files.ingested
+        if (downloads.queried == 0 && files.queried == 0) {
+            logger.warn(
+                module = RuntimeModule.STORAGE.name,
+                message = "Priority document sync saw 0 MediaStore files — grant All files access so Downloads/PDFs are visible",
+                metadata = mapOf(
+                    "downloadsQueried" to downloads.queried.toString(),
+                    "filesQueried" to files.queried.toString(),
+                ),
+            )
+        } else {
+            logger.info(
+                module = RuntimeModule.STORAGE.name,
+                message = "Priority document sync completed",
+                metadata = mapOf(
+                    "downloadsQueried" to downloads.queried.toString(),
+                    "downloadsIngested" to downloads.ingested.toString(),
+                    "filesQueried" to files.queried.toString(),
+                    "filesIngested" to files.ingested.toString(),
+                    "documentsIngested" to documentsIngested.toString(),
+                ),
+            )
+        }
         return IngestionSummary(
             photosIngested = photos.ingested,
-            documentsIngested = documents.ingested,
+            documentsIngested = documentsIngested,
         )
     }
 
@@ -115,6 +143,8 @@ class FullDeviceIndexer(
         message: String,
         indexedInBatch: Int,
         offset: Int,
+        summaryStats: SummaryStats,
+        hasMore: Boolean,
     ) {
         eventBus.publish(
             RuntimeEvent(
@@ -129,14 +159,29 @@ class FullDeviceIndexer(
                         "indexedInBatch" to indexedInBatch.toString(),
                         "totalIndexed" to checkpointStore.getTotalIndexed().toString(),
                         "offset" to offset.toString(),
+                        "summariesReady" to summaryStats.ready.toString(),
+                        "summariesPending" to summaryStats.pending.toString(),
+                        "documentsTotal" to summaryStats.total.toString(),
+                        "hasMore" to hasMore.toString(),
                     ),
             ),
         )
     }
 
     private fun buildProgressMessage(result: BatchResult): String {
-        val action = if (result.ingested > 0) "Indexed ${result.ingested}" else "Scanned"
-        return "$action ${result.category.name.lowercase()} items (${result.totalIndexed} total indexed)"
+        val base = "Indexing ${result.category.displayName} · ${result.totalIndexed}"
+        if (result.documentsTotal <= 0 || result.summariesPending <= 0) return base
+        return "$base · Summaries ${result.summariesReady}/${result.documentsTotal}"
+    }
+
+    private suspend fun loadSummaryStats(): SummaryStats {
+        val dao = documentDao ?: return SummaryStats(0, 0, 0)
+        return runCatching {
+            val total = dao.countAll()
+            val ready = dao.countWithSummary()
+            val pending = dao.countMissingSummary()
+            SummaryStats(total = total, ready = ready, pending = pending)
+        }.getOrDefault(SummaryStats(0, 0, 0))
     }
 
     data class BatchResult(
@@ -147,6 +192,9 @@ class FullDeviceIndexer(
         val totalIndexed: Long,
         val hasMore: Boolean,
         val offset: Int,
+        val summariesReady: Int = 0,
+        val summariesPending: Int = 0,
+        val documentsTotal: Int = 0,
     )
 
     data class IngestionSummary(
@@ -154,9 +202,15 @@ class FullDeviceIndexer(
         val documentsIngested: Int,
     )
 
+    data class SummaryStats(
+        val total: Int,
+        val ready: Int,
+        val pending: Int,
+    )
+
     companion object {
         const val DEFAULT_BATCH_SIZE = 50
-        const val PRIORITY_BATCH_SIZE = 25
+        const val PRIORITY_BATCH_SIZE = 75
     }
 }
 

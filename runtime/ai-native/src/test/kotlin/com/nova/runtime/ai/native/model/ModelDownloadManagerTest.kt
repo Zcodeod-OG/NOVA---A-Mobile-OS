@@ -80,4 +80,32 @@ class ModelDownloadManagerTest {
         assertFalse(state.readiness.inferenceLightReady)
         assertFalse(state.readiness.inferenceFullReady)
     }
+
+    @Test
+    fun ensureAllModels_purgesCorruptWhisperBeforeDownload() = runTest {
+        val modelsDir = File(context.cacheDir, "nova-model-download-corrupt")
+        modelsDir.deleteRecursively()
+        modelsDir.mkdirs()
+
+        File(modelsDir, ModelAssetPaths.EMBEDDING_MODEL).writeBytes(ByteArray(1_100_000) { 1 })
+        File(modelsDir, ModelAssetPaths.WHISPER_MODEL).writeBytes(ByteArray(15) { 0 })
+
+        val manager = AndroidModelDownloadManager(
+            context = context,
+            modelLoader = AndroidModelLoader(
+                context = context,
+                config = ModelLoadConfig(modelsDirectory = modelsDir.absolutePath),
+            ),
+            connectivity = NetworkAvailabilityChecker { false },
+            modelsDirectory = modelsDir,
+        )
+
+        manager.ensureAllModels()
+
+        val state = manager.state.value
+        assertEquals(ModelDownloadPhase.OFFLINE, state.phase)
+        assertTrue(state.readiness.coreReady)
+        assertFalse(state.readiness.voiceReady)
+        assertFalse(File(modelsDir, ModelAssetPaths.WHISPER_MODEL).exists())
+    }
 }

@@ -37,6 +37,10 @@ object CapabilityOperationAliases {
                 androidKeys += LookupKey("search.documents", "search")
             NovaCapabilityOperations.SEARCH_SEMANTIC ->
                 androidKeys += LookupKey("search.semantic", "search")
+            NovaCapabilityOperations.DEVICE_OPEN_APP ->
+                androidKeys += LookupKey("device", NovaCapabilityOperations.DEVICE_OPEN_APP)
+            NovaCapabilityOperations.DEVICE_APP_SEARCH ->
+                androidKeys += LookupKey("device", NovaCapabilityOperations.DEVICE_APP_SEARCH)
         }
 
         if (operation.contains('.')) {

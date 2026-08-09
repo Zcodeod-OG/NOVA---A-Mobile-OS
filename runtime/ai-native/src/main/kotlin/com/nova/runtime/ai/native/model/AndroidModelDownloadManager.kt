@@ -8,6 +8,7 @@ import com.nova.runtime.ai.model.ModelDownloadPhase
 import com.nova.runtime.ai.model.ModelDownloadSessionState
 import com.nova.runtime.ai.model.ModelFilePhase
 import com.nova.runtime.ai.model.ModelFileProgress
+import com.nova.runtime.ai.model.ModelFileValidator
 import com.nova.runtime.ai.model.ModelLoader
 import com.nova.runtime.ai.model.ModelReadiness
 import com.nova.runtime.ai.model.ResumableFileDownloader
@@ -38,6 +39,8 @@ class AndroidModelDownloadManager(
     override val state: StateFlow<ModelDownloadSessionState> = _state.asStateFlow()
 
     override suspend fun ensureAllModels() = mutex.withLock {
+        purgeInvalidModelFiles()
+
         if (_state.value.phase == ModelDownloadPhase.COMPLETE && isFullyReady(_state.value.readiness)) {
             return
         }
@@ -328,6 +331,16 @@ class AndroidModelDownloadManager(
             llmLightReady = ready(ModelAssetPaths.LLM_LIGHT_MODEL),
             llmFullReady = ready(ModelAssetPaths.LLM_FULL_MODEL),
         )
+    }
+
+    private fun purgeInvalidModelFiles() {
+        ModelDownloadCatalog.ENTRIES.forEach { entry ->
+            val target = File(modelsDir, entry.fileName)
+            if (ModelFileValidator.isCorrupt(entry.fileName, target)) {
+                target.delete()
+                File(modelsDir, "${entry.fileName}.part").delete()
+            }
+        }
     }
 
     private fun isFullyReady(readiness: ModelReadiness): Boolean =

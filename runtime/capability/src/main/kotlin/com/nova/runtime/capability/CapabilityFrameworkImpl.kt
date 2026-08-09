@@ -63,12 +63,15 @@ class CapabilityFrameworkImpl(
 
         val metadata = resolution.metadata
         val provider = resolution.provider
+        // Use the alias-matched operation the provider actually supports
+        // (pipeline may send short form like "create" / "send_message").
+        val operation = resolution.resolvedOperation
 
         eventPublisher.publishResolved(
             traceId = request.traceId,
             capabilityType = request.capabilityType,
             providerId = provider.providerId,
-            operation = request.operation,
+            operation = operation,
         )
         eventPublisher.publishSelected(
             traceId = request.traceId,
@@ -91,7 +94,7 @@ class CapabilityFrameworkImpl(
         }
 
         val execRequest = CapabilityExecutionRequest(
-            operation = request.operation,
+            operation = operation,
             parameters = request.parameters,
             traceId = request.traceId,
         )
@@ -161,19 +164,24 @@ class CapabilityFrameworkImpl(
                 traceId = request.traceId,
                 capabilityType = request.capabilityType,
                 providerId = provider.providerId,
-                operation = request.operation,
+                operation = operation,
                 latencyMs = latencyMs,
                 transactionId = transaction.transactionId,
+                userMessage = result.output["userMessage"],
+                answer = result.output["answer"],
+                matchDebug = result.output["matchDebug"],
             )
         }
 
         logger.info(
             RuntimeModule.CAPABILITY.name,
-            "Capability ${request.capabilityType}.${request.operation} completed",
+            "Capability ${request.capabilityType}.$operation completed",
             request.traceId,
             durationMs = latencyMs,
             metadata = mapOf(
                 "providerId" to provider.providerId,
+                "requestedOperation" to request.operation,
+                "resolvedOperation" to operation,
                 "success" to (result is CapabilityResult.Success).toString(),
             ),
         )

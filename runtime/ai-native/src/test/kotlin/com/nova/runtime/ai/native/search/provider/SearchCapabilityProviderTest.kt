@@ -135,6 +135,7 @@ class SearchCapabilityProviderTest {
             vectorIndex = vectorIndex,
             photoRepository = FakePhotoRepository(),
             documentRepository = documentRepository,
+            documentDao = FakeDocumentDao(documentRepository),
             searchIndexPipeline = pipeline,
             mediaStoreIngestionService = createNoOpIngestionService(
                 pipeline,
@@ -148,6 +149,7 @@ class SearchCapabilityProviderTest {
         return DocumentSearchCapabilityProvider(
             documentSearchService = DocumentSearchService(FakeDocumentDao(), NoOpRuntimeLogger()),
             semanticSearchService = semanticSearchService,
+            documentRepository = documentRepository,
         )
     }
 
@@ -235,6 +237,15 @@ class SearchCapabilityProviderTest {
         override suspend fun getByProjectId(projectId: UUID) = emptyList<DocumentEntity>()
         override suspend fun listUnindexed(limit: Int) =
             repository.records.values.filter { it.embeddingId == null }.take(limit)
+        override suspend fun listMissingContentText(limit: Int) =
+            repository.records.values.filter { it.contentText == null }.take(limit)
+        override suspend fun listMissingSummary(limit: Int) =
+            repository.records.values.filter { it.summary == null }.take(limit)
+        override suspend fun countAll() = repository.records.size
+        override suspend fun countWithSummary() =
+            repository.records.values.count { !it.summary.isNullOrBlank() }
+        override suspend fun countMissingSummary() =
+            repository.records.values.count { it.summary.isNullOrBlank() }
     }
 
     private class FakePhotoDao : com.nova.runtime.storage.dao.PhotoDao {

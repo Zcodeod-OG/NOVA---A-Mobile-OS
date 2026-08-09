@@ -43,7 +43,18 @@ class MediaStoreIngestionService(
     suspend fun ensureSynced(limit: Int = FullDeviceIndexer.PRIORITY_BATCH_SIZE) {
         syncMutex.withLock {
             ingestPhotos(limit, offset = 0)
-            ingestDownloads(limit, offset = 0)
+            val downloads = ingestDownloads(limit, offset = 0)
+            val files = ingestFiles(limit, offset = 0)
+            if (downloads.queried == 0 && files.queried == 0) {
+                logger.warn(
+                    module = RuntimeModule.STORAGE.name,
+                    message = "MediaStore document sync empty — All files access may be required to index Downloads/PDFs",
+                    metadata = mapOf(
+                        "downloadsQueried" to "0",
+                        "filesQueried" to "0",
+                    ),
+                )
+            }
             indexPendingEmbeddings(limit)
         }
     }

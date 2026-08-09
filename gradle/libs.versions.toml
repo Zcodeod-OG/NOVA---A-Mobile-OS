@@ -18,6 +18,8 @@ androidx-test-ext = "1.2.1"
 espresso = "3.6.1"
 onnxruntime = "1.19.2"
 mlkit-text-recognition = "16.0.1"
+pdfbox-android = "2.0.27.0"
+mediapipe-tasks-genai = "0.10.27"
 
 [libraries]
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
@@ -52,6 +54,8 @@ androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", vers
 
 onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntime" }
 mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkit-text-recognition" }
+pdfbox-android = { module = "com.tom-roush:pdfbox-android", version.ref = "pdfbox-android" }
+mediapipe-tasks-genai = { module = "com.google.mediapipe:tasks-genai", version.ref = "mediapipe-tasks-genai" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

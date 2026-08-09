@@ -54,6 +54,7 @@ class DefaultCapabilityProviderResolver(
         return CapabilityResolutionResult(
             provider = selected.provider,
             metadata = selected.metadata,
+            resolvedOperation = operation,
         )
     }
 }

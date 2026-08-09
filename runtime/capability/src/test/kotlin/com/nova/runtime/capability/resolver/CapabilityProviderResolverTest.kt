@@ -107,6 +107,32 @@ class CapabilityProviderResolverTest {
 
         assertNotNull(result)
         assertEquals("android-communication", result.provider.providerId)
+        assertEquals("whatsapp.send_message", result.resolvedOperation)
+    }
+
+    @Test
+    fun resolve_pipelineAlarmCreate_returnsResolvedQualifiedOperation() = runTest {
+        val timeProvider =
+            object : StubCapabilityProvider(
+                providerId = "android-time",
+                capabilityType = "time",
+                version = "1.0.0",
+                operations = setOf("alarm.create", "calendar.create"),
+            ) {}
+        val registry = DefaultCapabilityRegistry(listOf(timeProvider))
+        val lifecycle = DefaultCapabilityLifecycleManager(registry)
+        val resolver = DefaultCapabilityProviderResolver(registry, lifecycle)
+
+        val result = resolver.resolve(
+            CapabilityResolutionRequest(
+                capabilityType = "alarm",
+                operation = "create",
+            ),
+        )
+
+        assertNotNull(result)
+        assertEquals("android-time", result.provider.providerId)
+        assertEquals("alarm.create", result.resolvedOperation)
     }
 
     @Test

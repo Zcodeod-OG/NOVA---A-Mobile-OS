@@ -11,4 +11,10 @@ data class CapabilityResolutionRequest(
 data class CapabilityResolutionResult(
     val provider: CapabilityProvider,
     val metadata: CapabilityMetadata,
+    /**
+     * Operation name accepted by [provider], which may differ from the pipeline's short form
+     * after [com.nova.runtime.capability.resolver.CapabilityOperationAliases] remapping
+     * (e.g. pipeline `create` → provider `alarm.create`).
+     */
+    val resolvedOperation: String,
 )

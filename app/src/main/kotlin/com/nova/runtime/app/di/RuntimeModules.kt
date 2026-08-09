@@ -1,7 +1,6 @@
 package com.nova.runtime.app.di
 
 import com.nova.runtime.android.di.androidAdapterModule
-import com.nova.runtime.android.di.androidCapabilityModule
 import com.nova.runtime.capability.di.capabilityModule
 import com.nova.runtime.app.conversation.SessionRepositoryPersistence
 import com.nova.runtime.conversation.di.conversationModule
@@ -47,7 +46,9 @@ val runtimeModule = module {
         policyModule,
         capabilityModule,
         androidAdapterModule,
-        androidCapabilityModule,
+        // androidCapabilityModule is loaded as a top-level module in NovaApplication
+        // AFTER this module so its CapabilityRegistry override actually wins (Koin
+        // nested includes() do not reliably override sibling definitions).
         executionModule,
         sprint0StubsModule,
         understandingModule,

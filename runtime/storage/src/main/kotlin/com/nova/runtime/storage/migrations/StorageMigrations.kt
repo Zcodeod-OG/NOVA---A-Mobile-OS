@@ -6,7 +6,10 @@ import androidx.room.migration.Migration
 object StorageMigrations {
     const val VERSION_1 = 1
     const val VERSION_2 = 2
-    const val CURRENT_VERSION = VERSION_2
+    const val VERSION_3 = 3
+    const val VERSION_4 = 4
+    const val VERSION_5 = 5
+    const val CURRENT_VERSION = VERSION_5
 
-    val ALL: Array<Migration> = arrayOf(Migration_1_2)
+    val ALL: Array<Migration> = arrayOf(Migration_1_2, Migration_2_3, Migration_3_4, Migration_4_5)
 }

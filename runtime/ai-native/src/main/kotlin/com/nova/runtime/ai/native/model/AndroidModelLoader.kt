@@ -3,6 +3,7 @@ package com.nova.runtime.ai.native.model
 import android.content.Context
 import com.nova.runtime.ai.model.ModelAssetPaths
 import com.nova.runtime.ai.model.ModelAvailability
+import com.nova.runtime.ai.model.ModelFileValidator
 import com.nova.runtime.ai.model.ModelLoadConfig
 import com.nova.runtime.ai.model.ModelLoader
 import java.io.File
@@ -37,11 +38,12 @@ class AndroidModelLoader(
     override suspend fun availabilityReport(): List<ModelAvailability> = withContext(Dispatchers.IO) {
         ModelAssetPaths.ALL_REQUIRED.map { fileName ->
             val target = File(modelsDir, fileName)
+            val sizeBytes = if (target.isFile) target.length() else 0L
             ModelAvailability(
                 fileName = fileName,
                 path = target.absolutePath,
-                available = target.isFile,
-                sizeBytes = if (target.isFile) target.length() else 0L,
+                available = ModelFileValidator.isValid(fileName, target),
+                sizeBytes = sizeBytes,
             )
         }
     }
@@ -58,7 +60,13 @@ class AndroidModelLoader(
 
     private fun localModelFile(fileName: String): File? {
         val target = File(modelsDir, fileName)
-        return target.takeIf { it.isFile }
+        if (!target.isFile) return null
+        if (ModelFileValidator.isCorrupt(fileName, target)) {
+            target.delete()
+            File(modelsDir, "${fileName}.part").delete()
+            return null
+        }
+        return target
     }
 
     private fun copyAssetIfPresent(fileName: String, target: File) {
@@ -66,6 +74,9 @@ class AndroidModelLoader(
             context.assets.open("models/$fileName").use { input ->
                 target.parentFile?.mkdirs()
                 target.outputStream().use { output -> input.copyTo(output) }
+            }
+            if (ModelFileValidator.isCorrupt(fileName, target)) {
+                target.delete()
             }
         }
     }

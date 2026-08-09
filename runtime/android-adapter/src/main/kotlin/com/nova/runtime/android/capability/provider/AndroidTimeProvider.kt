@@ -91,13 +91,19 @@ class AndroidTimeProvider(
             ?: error("triggerAtMillis required")
         val requestCode = parameters["requestCode"]
             ?: parameters.hashCode().toString().takeLast(6).toInt().toString()
+        // clock → system Clock app (+ AlarmManager backup); reminder → notification alarm.
+        val alarmKind = parameters["alarmKind"]
+            ?: parameters["intentType"]
+            ?: "clock"
 
         return adapters.alarms.execute(
             operation = AlarmOperations.CREATE,
             parameters = buildMap {
                 put("requestCode", requestCode)
                 put("triggerAtMillis", triggerAtMillis)
+                put("alarmKind", alarmKind)
                 parameters["action"]?.let { put("action", it) }
+                (parameters["label"] ?: parameters["title"])?.let { put("label", it) }
             },
             traceId = traceId,
         )

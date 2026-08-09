@@ -1,0 +1,16 @@
+WEEKLY TIMETABLE
+FRIDAY
+09:00-10:00 Physics
+10:00-11:00 Chemistry Lab
+12:00-13:00 Chemistry
+14:00-15:00 Biology
+SATURDAY
+09:00-10:00 Math
+10:00-11:00 English
+12:00-13:00 DSP
+13:00-14:00 Data Structures
+14:30-15:30 Operating Systems
+16:00-17:00 Lab
+SUNDAY
+11:00-12:00 Rest
+13:00-14:00 Project Work

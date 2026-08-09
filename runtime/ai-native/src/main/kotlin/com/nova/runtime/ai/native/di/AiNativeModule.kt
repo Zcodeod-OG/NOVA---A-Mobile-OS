@@ -2,8 +2,10 @@ package com.nova.runtime.ai.native.di
 
 import com.nova.runtime.ai.model.EmbeddingGenerator
 import com.nova.runtime.ai.model.ImageEmbeddingGenerator
+import com.nova.runtime.ai.model.DocumentTextExtractor
 import com.nova.runtime.ai.model.ModelDownloadManager
 import com.nova.runtime.ai.model.ModelLoader
+import com.nova.runtime.ai.native.extraction.AndroidDocumentTextExtractor
 import com.nova.runtime.ai.native.model.AndroidModelDownloadManager
 import com.nova.runtime.ai.model.OcrEngine
 import com.nova.runtime.ai.native.indexing.EmbeddingIndexer
@@ -65,6 +67,13 @@ val aiNativeModule = module {
     }
 
     single<OcrEngine> { MlKitOcrEngine() }
+
+    single<DocumentTextExtractor> {
+        AndroidDocumentTextExtractor(
+            context = androidContext(),
+            ocrEngine = get(),
+        )
+    }
 
     single<ModelRegistry> {
         OnDeviceModelRegistryFactory(

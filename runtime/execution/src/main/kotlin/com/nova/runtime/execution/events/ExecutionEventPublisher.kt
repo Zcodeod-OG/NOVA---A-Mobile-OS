@@ -81,14 +81,20 @@ class ExecutionEventPublisher(
         )
     }
 
-    suspend fun publishGraphFailed(traceId: UUID, graphId: UUID, errorCode: String) {
+    suspend fun publishGraphFailed(
+        traceId: UUID,
+        graphId: UUID,
+        errorCode: String,
+        userVisibleMessage: String? = null,
+    ) {
         publish(
             eventType = ExecutionEvents.GRAPH_FAILED,
             traceId = traceId,
-            payload = mapOf(
-                "graphId" to graphId.toString(),
-                "errorCode" to errorCode,
-            ),
+            payload = buildMap {
+                put("graphId", graphId.toString())
+                put("errorCode", errorCode)
+                userVisibleMessage?.takeIf { it.isNotBlank() }?.let { put("userVisibleMessage", it) }
+            },
             priority = EventPriority.HIGH,
         )
     }

@@ -3,6 +3,7 @@ package com.nova.runtime.ai.native.model
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.nova.runtime.ai.model.ModelAssetPaths
+import com.nova.runtime.ai.model.ModelFileValidator
 import com.nova.runtime.ai.model.ModelLoadConfig
 import java.io.File
 import kotlinx.coroutines.test.runTest
@@ -47,7 +48,9 @@ class AndroidModelLoaderTest {
         val modelsDir = File(context.cacheDir, "nova-models-report")
         modelsDir.deleteRecursively()
         modelsDir.mkdirs()
-        File(modelsDir, ModelAssetPaths.EMBEDDING_MODEL).writeText("stub")
+        File(modelsDir, ModelAssetPaths.EMBEDDING_MODEL).writeBytes(
+            ByteArray(ModelFileValidator.minimumValidBytes(ModelAssetPaths.EMBEDDING_MODEL).toInt()),
+        )
         val loader = AndroidModelLoader(
             context = context,
             config = ModelLoadConfig(
@@ -62,6 +65,25 @@ class AndroidModelLoaderTest {
         assertTrue(report.first { it.fileName == ModelAssetPaths.EMBEDDING_MODEL }.available)
         assertFalse(report.first { it.fileName == ModelAssetPaths.LLM_LIGHT_MODEL }.available)
         assertFalse(File(modelsDir, ModelAssetPaths.LLM_LIGHT_MODEL).exists())
+    }
+
+    @Test
+    fun availabilityReport_marksCorruptFileUnavailable() = runTest {
+        val modelsDir = File(context.cacheDir, "nova-models-corrupt")
+        modelsDir.deleteRecursively()
+        modelsDir.mkdirs()
+        File(modelsDir, ModelAssetPaths.WHISPER_MODEL).writeBytes(ByteArray(15) { 0 })
+        val loader = AndroidModelLoader(
+            context = context,
+            config = ModelLoadConfig(
+                modelsDirectory = modelsDir.absolutePath,
+                copyFromAssetsOnFirstLaunch = true,
+            ),
+        )
+
+        val report = loader.availabilityReport()
+
+        assertFalse(report.first { it.fileName == ModelAssetPaths.WHISPER_MODEL }.available)
     }
 
     @Test

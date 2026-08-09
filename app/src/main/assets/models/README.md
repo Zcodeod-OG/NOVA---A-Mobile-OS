@@ -15,8 +15,9 @@ Models resolve at runtime from:
 | File | Size (approx.) | Purpose | In git? |
 |------|----------------|---------|---------|
 | `embedding-mini.onnx` | ~86 MB | Text embeddings for semantic search (384-dim MiniLM) | **Yes** — bundled in assets |
-| `llm-light.onnx` | ~480 MB | Tier-1 on-device LLM (Qwen2.5-0.5B Q4) | No — first-run download or script |
-| `llm-full.onnx` | ~1.2 GB | Tier-2 on-device LLM (Qwen2.5-1.5B Q4) | No — first-run download or script |
+| `Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task` | ~500 MB+ | MediaPipe grounded document Q&A | No — `./scripts/download-gemma-task.sh` (HF Gemma license) |
+| `llm-light.onnx` | ~480 MB | Tier-1 ONNX LLM (decode limited) | No — first-run download or script |
+| `llm-full.onnx` | ~1.2 GB | Tier-2 ONNX LLM (decode limited) | No — first-run download or script |
 | `whisper-tiny.onnx` | ~40 MB | Offline speech recognition | No — first-run download or script |
 | `image-encoder.onnx` | TBD | Visual embeddings for photo search (planned) | No — coming with multimodal support |
 
@@ -26,7 +27,8 @@ After cloning the repo, `embedding-mini.onnx` is already present. Install the re
 
 ```bash
 ./scripts/download-whisper-onnx.sh
-./scripts/download-llm-onnx.sh
+./scripts/download-gemma-task.sh   # optional polish for grounded doc Q&A (HF Gemma license)
+./scripts/download-llm-onnx.sh     # optional ONNX tiers (not used for doc Q&A)
 ```
 
 Then build and run:
@@ -57,6 +59,9 @@ adb shell run-as com.nova.runtime.app cp /data/local/tmp/llm-full.onnx files/mod
 adb push whisper-tiny.onnx /data/local/tmp/
 adb shell run-as com.nova.runtime.app cp /data/local/tmp/whisper-tiny.onnx files/models/
 
+adb push Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task /data/local/tmp/
+adb shell run-as com.nova.runtime.app cp /data/local/tmp/Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task files/models/
+
 adb shell run-as com.nova.runtime.app ls -lh files/models/
 ```
 
@@ -65,6 +70,7 @@ adb shell run-as com.nova.runtime.app ls -lh files/models/
 | File | Source |
 |------|--------|
 | `embedding-mini.onnx` | Exported from [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (see `minilm-onnx-export/`) |
+| `Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task` | [litert-community/Gemma3-1B-IT](https://huggingface.co/litert-community/Gemma3-1B-IT) → `Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task` |
 | `llm-light.onnx` | [onnx-community/Qwen2.5-0.5B-Instruct](https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct) → `onnx/model_q4f16.onnx` |
 | `llm-full.onnx` | [onnx-community/Qwen2.5-1.5B-Instruct](https://huggingface.co/onnx-community/Qwen2.5-1.5B-Instruct) → `onnx/model_q4.onnx` |
 | `whisper-tiny.onnx` | [onnx-community/whisper-tiny.en](https://huggingface.co/onnx-community/whisper-tiny.en) → `onnx/model.onnx` |

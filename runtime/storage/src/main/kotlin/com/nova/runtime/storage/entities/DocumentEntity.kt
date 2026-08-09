@@ -45,4 +45,18 @@ data class DocumentEntity(
     val projectId: UUID?,
     val embeddingId: UUID?,
     val importance: Int,
+    /** Extracted plain-text content (PDF via render+OCR, text files read directly). Capped at ingest. */
+    val contentText: String? = null,
+    /**
+     * Extraction lifecycle: [com.nova.runtime.storage.search.ContentExtractStatus].
+     * Distinguishes never-tried, failed, empty file, and successful body extraction.
+     */
+    val contentExtractStatus: String = com.nova.runtime.storage.search.ContentExtractStatus.NOT_TRIED,
+    /** Wall-clock millis of the last extraction attempt (success, empty, or failed). */
+    val contentExtractedAt: Long? = null,
+    /**
+     * Short extractive discovery summary (filename + lead content / headings).
+     * Used for Stage A retrieval embeddings; answers still use [contentText].
+     */
+    val summary: String? = null,
 )

@@ -56,6 +56,25 @@ class IntentAdapterImplTest : AndroidAdapterRobolectricTest() {
     }
 
     @Test
+    fun execute_share_withJid_returnsJidInOutput() = runTest {
+        val result = adapter.execute(
+            IntentOperations.SHARE,
+            mapOf(
+                "uri" to "content://media/external/downloads/42",
+                "mimeType" to "application/pdf",
+                "packageName" to "com.whatsapp",
+                "jid" to "919876543210@s.whatsapp.net",
+            ),
+            traceId,
+        )
+        assertTrue(result is CapabilityResult.Success)
+        val success = result as CapabilityResult.Success
+        assertEquals("shared", success.output["status"])
+        assertEquals("com.whatsapp", success.output["packageName"])
+        assertEquals("919876543210@s.whatsapp.net", success.output["jid"])
+    }
+
+    @Test
     fun execute_dial_withoutPhoneNumber_returnsValidationFailure() = runTest {
         val result = adapter.execute(IntentOperations.DIAL, emptyMap(), traceId)
         assertTrue(result is CapabilityResult.Failure)

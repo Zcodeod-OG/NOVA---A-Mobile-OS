@@ -122,6 +122,13 @@ class DefaultTaskGenerator : TaskGenerator {
                     put("compoundFlow", it)
                     put("awaitSearchResult", "true")
                 }
+                // Document/file chain: recipient required; never seed message from the command.
+                if (nir.constraints["compoundFlow"] != null) {
+                    nir.constraints["recipient"]?.let {
+                        put("recipient", it)
+                        put("name", it)
+                    }
+                }
             }
             capability == "alarm" || nir.constraints["capabilityOperation"] == NovaCapabilityOperations.ALARM_CREATE -> {
                 put("capabilityType", "alarm")
@@ -132,6 +139,22 @@ class DefaultTaskGenerator : TaskGenerator {
                 put("capabilityType", "calendar")
                 put("operation", "create")
                 put("capabilityOperation", NovaCapabilityOperations.CALENDAR_CREATE)
+            }
+            capability == "device" ||
+                nir.constraints["capabilityOperation"] == NovaCapabilityOperations.DEVICE_OPEN_APP ||
+                nir.constraints["capabilityOperation"] == NovaCapabilityOperations.DEVICE_APP_SEARCH -> {
+                put("capabilityType", "device")
+                val op = nir.constraints["capabilityOperation"]
+                    ?: NovaCapabilityOperations.DEVICE_OPEN_APP
+                // Prefer short form that AndroidDeviceProvider accepts; aliases also map the qualified name.
+                put(
+                    "operation",
+                    when (op) {
+                        NovaCapabilityOperations.DEVICE_APP_SEARCH -> "app_search"
+                        else -> "open_app"
+                    },
+                )
+                put("capabilityOperation", op)
             }
             else -> {
                 put("capabilityType", nir.constraints["capabilityType"] ?: capability)
@@ -151,20 +174,38 @@ class DefaultTaskGenerator : TaskGenerator {
             put("text", it)
         }
         nir.constraints["triggerAtMillis"]?.let { put("triggerAtMillis", it) }
+        nir.constraints["alarmKind"]?.let { put("alarmKind", it) }
+        nir.constraints["intentType"]?.let { put("intentType", it) }
+        nir.constraints["appName"]?.let { put("appName", it) }
+        nir.constraints["searchQuery"]?.let { put("searchQuery", it) }
+        nir.constraints["label"]?.let { put("label", it) }
         nir.constraints["title"]?.let { put("title", it) }
         nir.constraints["startTime"]?.let { put("startTime", it) }
         nir.constraints["endTime"]?.let { put("endTime", it) }
         nir.context["rawPayload"]?.let { payload ->
-            if (!containsKey("query")) {
+            // Never put the raw command into WhatsApp search.query — it becomes message text
+            // via AndroidCommunicationProvider's query fallback.
+            val isWhatsApp = capability == "whatsapp" || capability.startsWith("whatsapp") ||
+                nir.constraints["capabilityOperation"] == NovaCapabilityOperations.WHATSAPP_SEND_MESSAGE
+            val isDocumentChain = nir.constraints["compoundFlow"] != null
+            if (!containsKey("query") && !isWhatsApp) {
                 put("query", payload)
             }
+            // Only use rawPayload as message for plain text WhatsApp sends that lack an
+            // extracted message — never for document/file chains.
             if (
-                nir.constraints["capabilityOperation"] == NovaCapabilityOperations.WHATSAPP_SEND_MESSAGE &&
-                nir.constraints["compoundFlow"] == null &&
-                !containsKey("message")
+                isWhatsApp &&
+                !isDocumentChain &&
+                !containsKey("message") &&
+                nir.goal != "send_document_whatsapp"
             ) {
-                put("message", payload)
-                put("text", payload)
+                // Prefer not to paste the whole command; leave message empty so validation /
+                // contact resolution can still proceed with recipient + phone.
+                // Keep a last-resort only when there is no recipient either.
+                if (nir.constraints["recipient"].isNullOrBlank()) {
+                    put("message", payload)
+                    put("text", payload)
+                }
             }
         }
         if (nir.entities.isNotEmpty()) {

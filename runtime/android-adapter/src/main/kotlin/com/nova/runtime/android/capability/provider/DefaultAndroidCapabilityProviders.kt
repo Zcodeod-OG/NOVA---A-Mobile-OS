@@ -16,12 +16,12 @@ fun androidCapabilityProviders(
         AndroidCommunicationProvider(context, logger, adapters),
         AndroidTimeProvider(context, logger, adapters),
         AndroidMediaProvider(context, logger, adapters),
+        AndroidDeviceProvider(context, logger, adapters),
     )
 
 /** Stubs kept in production for capabilities without Android providers yet. */
 private val PRODUCTION_STUB_PROVIDER_IDS = setOf(
     "stub-knowledge",
-    "stub-device",
     "stub-notifications",
 )
 

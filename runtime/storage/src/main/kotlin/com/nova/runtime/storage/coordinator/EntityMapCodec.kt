@@ -26,6 +26,7 @@ internal object EntityMapCodec {
             "projectId" to entity.projectId?.toString().orEmpty(),
             "embeddingId" to entity.embeddingId?.toString().orEmpty(),
             "importance" to entity.importance.toString(),
+            "summary" to entity.summary.orEmpty(),
         )
 
     fun documentFromMap(key: String, value: Map<String, String>): DocumentEntity =
@@ -43,6 +44,7 @@ internal object EntityMapCodec {
             projectId = value["projectId"]?.takeIf { it.isNotBlank() }?.let(::uuid),
             embeddingId = value["embeddingId"]?.takeIf { it.isNotBlank() }?.let(::uuid),
             importance = value["importance"]?.toIntOrNull() ?: 0,
+            summary = value["summary"]?.takeIf { it.isNotBlank() },
         )
 
     fun photoToMap(entity: PhotoEntity): Map<String, String> =

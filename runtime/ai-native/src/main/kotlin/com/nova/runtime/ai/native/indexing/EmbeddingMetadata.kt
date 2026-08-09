@@ -8,4 +8,6 @@ object EmbeddingMetadata {
 
     const val KIND_OCR = "ocr"
     const val KIND_IMAGE = "image"
+    /** Document discovery vector: filename + extractive summary (Stage A). */
+    const val KIND_SUMMARY = "summary"
 }

@@ -67,6 +67,17 @@ enum class IndexCategory {
     DOCUMENTS,
     ;
 
+    /** Short label for progress UI (e.g. Photos, Downloads). */
+    val displayName: String
+        get() =
+            when (this) {
+                PHOTOS -> "Photos"
+                VIDEOS -> "Videos"
+                AUDIO -> "Audio"
+                DOWNLOADS -> "Downloads"
+                DOCUMENTS -> "Documents"
+            }
+
     fun next(): IndexCategory {
         val values = entries
         val nextIndex = (ordinal + 1) % values.size

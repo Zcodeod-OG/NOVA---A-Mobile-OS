@@ -118,18 +118,20 @@ internal object AdapterErrorMapper {
         adapter: String,
         operation: String,
         cause: Throwable?,
-    ): RuntimeError =
-        RuntimeError(
+    ): RuntimeError {
+        val detail = cause?.message?.trim()?.takeIf { it.isNotEmpty() && it.length <= 220 }
+        return RuntimeError(
             code = "ANDROID_PLATFORM_FAILURE",
             category = ErrorCategory.INFRASTRUCTURE,
             severity = ErrorSeverity.HIGH,
             recoverable = false,
-            userVisibleMessage = "Android platform failure during $operation",
+            userVisibleMessage = detail ?: "Android platform failure during $operation",
             diagnostics = diagnosticsFrom(cause) + mapOf(
                 "adapter" to adapter,
                 "operation" to operation,
             ),
         )
+    }
 
     private fun diagnosticsFrom(cause: Throwable?): Map<String, String> {
         if (cause == null) return emptyMap()

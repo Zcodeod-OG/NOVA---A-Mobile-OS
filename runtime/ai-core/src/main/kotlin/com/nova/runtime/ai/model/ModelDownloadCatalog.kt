@@ -1,8 +1,8 @@
 package com.nova.runtime.ai.model
 
 /**
- * Remote and bundled model sources aligned with [scripts/download-llm-onnx.sh] and
- * [scripts/download-whisper-onnx.sh].
+ * Remote and bundled model sources aligned with [scripts/download-gemma-task.sh],
+ * [scripts/download-llm-onnx.sh], and [scripts/download-whisper-onnx.sh].
  */
 object ModelDownloadCatalog {
 
@@ -31,6 +31,14 @@ object ModelDownloadCatalog {
             minimumValidBytes = 10_000_000L,
             copyFromAssets = false,
             tier = ModelReadinessTier.VOICE,
+        ),
+        Entry(
+            fileName = ModelAssetPaths.GEMMA_TASK_MODEL,
+            downloadUrl = GEMMA_TASK_URL,
+            expectedSizeBytes = 550_000_000L,
+            minimumValidBytes = ModelAssetPaths.GEMMA_TASK_MIN_BYTES,
+            copyFromAssets = false,
+            tier = ModelReadinessTier.INFERENCE_LIGHT,
         ),
         Entry(
             fileName = ModelAssetPaths.LLM_LIGHT_MODEL,
@@ -64,6 +72,11 @@ object ModelDownloadCatalog {
 
     private const val WHISPER_URL =
         "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/main/onnx/model.onnx"
+
+    /** MediaPipe-compatible Gemma 3 1B IT (int4 .task) for grounded document answers. */
+    private const val GEMMA_TASK_URL =
+        "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/" +
+            "Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task"
 }
 
 enum class ModelReadinessTier {

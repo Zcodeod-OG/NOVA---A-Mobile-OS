@@ -86,6 +86,7 @@ class SemanticSearchServiceTest {
             vectorIndex = vectorIndex,
             photoRepository = photoRepository,
             documentRepository = documentRepository,
+            documentDao = FakeDocumentDao(documentRepository),
             searchIndexPipeline = pipeline,
             mediaStoreIngestionService = ingestionService,
             fullDeviceIndexer = null,
@@ -322,5 +323,14 @@ class SemanticSearchServiceTest {
         override suspend fun getByProjectId(projectId: UUID) = emptyList<DocumentEntity>()
         override suspend fun listUnindexed(limit: Int) =
             repository.records.values.filter { it.embeddingId == null }.take(limit)
+        override suspend fun listMissingContentText(limit: Int) =
+            repository.records.values.filter { it.contentText.isNullOrBlank() }.take(limit)
+        override suspend fun listMissingSummary(limit: Int) =
+            repository.records.values.filter { it.summary == null }.take(limit)
+        override suspend fun countAll() = repository.records.size
+        override suspend fun countWithSummary() =
+            repository.records.values.count { !it.summary.isNullOrBlank() }
+        override suspend fun countMissingSummary() =
+            repository.records.values.count { it.summary.isNullOrBlank() }
     }
 }

@@ -23,7 +23,11 @@ class EmbeddingIndexer(
         objectType: String,
         text: String,
         embeddingKind: String? = null,
+        replaceExisting: Boolean = false,
     ): UUID? {
+        if (replaceExisting) {
+            vectorIndex.deleteByObjectId(objectId)
+        }
         val embeddingId = UUID.randomUUID()
         return when (val result = embeddingGenerator.embed(text)) {
             is EmbeddingResult.Success -> {

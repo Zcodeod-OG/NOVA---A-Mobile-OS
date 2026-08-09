@@ -56,8 +56,14 @@ class ContactsAdapterImpl(
 
     private fun search(parameters: Map<String, String>): Map<String, String> {
         PermissionChecker.ensureGranted(context, android.Manifest.permission.READ_CONTACTS)
-        val query = parameters["query"].orEmpty()
-        val selection = if (query.isBlank()) null else "${ContactsContract.Contacts.DISPLAY_NAME} LIKE ?"
+        val query = parameters["query"].orEmpty().trim()
+        // Case-insensitive match so "atharv" finds "Atharv".
+        val selection =
+            if (query.isBlank()) {
+                null
+            } else {
+                "${ContactsContract.Contacts.DISPLAY_NAME} LIKE ? COLLATE NOCASE"
+            }
         val selectionArgs = if (query.isBlank()) null else arrayOf("%$query%")
         val results = mutableListOf<String>()
         context.contentResolver.query(

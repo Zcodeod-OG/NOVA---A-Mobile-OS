@@ -7,11 +7,11 @@ import android.view.accessibility.AccessibilityEvent
 class NovaAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
-        bridge.bind(this)
+        sharedBridge?.bind(this)
     }
 
     override fun onDestroy() {
-        bridge.unbind()
+        sharedBridge?.unbind()
         super.onDestroy()
     }
 
@@ -20,11 +20,13 @@ class NovaAccessibilityService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     companion object {
-        lateinit var bridge: AccessibilityServiceBridge
-            private set
+        @Volatile
+        private var sharedBridge: AccessibilityServiceBridge? = null
 
         fun installBridge(bridge: AccessibilityServiceBridge) {
-            this.bridge = bridge
+            sharedBridge = bridge
         }
+
+        fun isEnabled(): Boolean = sharedBridge?.isConnected() == true
     }
 }

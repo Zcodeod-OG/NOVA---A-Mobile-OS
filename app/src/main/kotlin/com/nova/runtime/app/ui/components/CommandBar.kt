@@ -2,17 +2,21 @@ package com.nova.runtime.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,15 +26,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.nova.runtime.app.ui.theme.NovaCyanAccent
-import com.nova.runtime.app.ui.theme.NovaSurfaceDark
-import com.nova.runtime.app.ui.theme.NovaTextPrimary
-import com.nova.runtime.app.ui.theme.NovaTextSecondary
+import com.nova.runtime.app.ui.theme.NovaColors
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
 
 @Composable
 fun CommandBar(
@@ -43,96 +47,119 @@ fun CommandBar(
 ) {
     var queryText by remember { mutableStateOf("") }
 
+    fun submit() {
+        val trimmed = queryText.trim()
+        if (trimmed.isNotBlank() && enabled && !isRecording) {
+            onCommandSubmit(trimmed)
+            queryText = ""
+        }
+    }
+
     Column(modifier = modifier) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(NovaSurfaceDark)
-                .border(1.dp, NovaCyanAccent.copy(alpha = 0.6f), RoundedCornerShape(24.dp))
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .shadow(
+                    elevation = 24.dp,
+                    shape = MaterialTheme.shapes.extraLarge,
+                    ambientColor = NovaColors.accent.copy(alpha = 0.08f),
+                    spotColor = NovaColors.accent.copy(alpha = 0.12f),
+                )
+                .clip(MaterialTheme.shapes.extraLarge)
+                .background(NovaColors.glassSurface)
+                .border(1.dp, NovaColors.glassBorder, MaterialTheme.shapes.extraLarge)
+                .padding(horizontal = 8.dp, vertical = 8.dp),
         ) {
-            Button(
-                onClick = onMicToggle,
-                shape = CircleShape,
-                enabled = enabled,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRecording) {
-                        NovaCyanAccent
-                    } else {
-                        NovaSurfaceDark
-                    },
-                    contentColor = if (isRecording) NovaSurfaceDark else NovaCyanAccent,
-                    disabledContainerColor = NovaSurfaceDark.copy(alpha = 0.5f),
-                    disabledContentColor = NovaTextSecondary,
-                ),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = if (isRecording) "REC" else "MIC",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            BasicTextField(
-                value = queryText,
-                onValueChange = { queryText = it },
-                modifier = Modifier.weight(1f),
-                enabled = enabled && !isRecording,
-                textStyle = TextStyle(
-                    color = NovaTextPrimary,
-                    fontSize = 14.sp,
-                ),
-                cursorBrush = SolidColor(NovaCyanAccent),
-                decorationBox = { innerTextField ->
-                    if (queryText.isEmpty()) {
-                        Text(
-                            text = if (isRecording) {
-                                "Recording voice command…"
+                IconButton(
+                    onClick = onMicToggle,
+                    enabled = enabled,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isRecording) {
+                                NovaColors.error.copy(alpha = 0.15f)
                             } else {
-                                "Ask NOVA or execute AI command…"
+                                NovaColors.surfaceElevated.copy(alpha = 0.6f)
                             },
-                            color = NovaTextSecondary,
-                            fontSize = 14.sp,
-                        )
-                    }
-                    innerTextField()
-                },
-            )
+                        ),
+                ) {
+                    Icon(
+                        imageVector = if (isRecording) Icons.Filled.Stop else Icons.Filled.Mic,
+                        contentDescription = if (isRecording) "Stop recording" else "Start voice input",
+                        tint = if (isRecording) NovaColors.error else NovaColors.accent,
+                    )
+                }
 
-            Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(4.dp))
 
-            Button(
-                onClick = {
-                    if (queryText.isNotBlank()) {
-                        onCommandSubmit(queryText)
-                        queryText = ""
-                    }
-                },
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = NovaCyanAccent,
-                ),
-                enabled = queryText.isNotBlank() && enabled && !isRecording,
-            ) {
-                Text(
-                    text = "EXECUTE",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = NovaSurfaceDark,
+                BasicTextField(
+                    value = queryText,
+                    onValueChange = { queryText = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 10.dp),
+                    enabled = enabled && !isRecording,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = NovaColors.textPrimary),
+                    cursorBrush = SolidColor(NovaColors.accent),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { submit() }),
+                    decorationBox = { innerTextField ->
+                        if (queryText.isEmpty()) {
+                            Text(
+                                text = if (isRecording) {
+                                    "Listening…"
+                                } else {
+                                    "Ask NOVA anything"
+                                },
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = NovaColors.textSecondary,
+                            )
+                        }
+                        innerTextField()
+                    },
                 )
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                IconButton(
+                    onClick = ::submit,
+                    enabled = queryText.isNotBlank() && enabled && !isRecording,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (queryText.isNotBlank() && enabled && !isRecording) {
+                                NovaColors.accent
+                            } else {
+                                NovaColors.surfaceElevated.copy(alpha = 0.4f)
+                            },
+                        ),
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "Send",
+                        tint = if (queryText.isNotBlank() && enabled && !isRecording) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            NovaColors.textSecondary
+                        },
+                    )
+                }
             }
         }
 
         voiceStatusMessage?.takeIf { it.isNotBlank() }?.let { message ->
             Text(
                 text = message,
-                color = NovaTextSecondary,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(start = 8.dp, top = 4.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = NovaColors.textSecondary,
+                modifier = Modifier.padding(start = 16.dp, top = 8.dp),
             )
         }
     }

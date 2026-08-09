@@ -31,6 +31,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -72,6 +73,7 @@ class ExecutionScheduler(
         resetState(graph)
         metrics.beginGraph(graph.actionNodes.size)
         monitor.initializeGraph(graphId, graph.actionNodes.map { it.id })
+        val lastUserMessage = AtomicReference<String?>(null)
 
         logger.info(
             RuntimeModule.EXECUTION.name,
@@ -82,7 +84,7 @@ class ExecutionScheduler(
         historyRecorder.recordStart(executionId, graphId, traceId)
 
         if (graph.actionNodes.isEmpty()) {
-            return completeGraph(traceId, graphId, executionId, startNanos, 0)
+            return completeGraph(traceId, graphId, executionId, startNanos, 0, null)
         }
 
         try {
@@ -115,6 +117,7 @@ class ExecutionScheduler(
                     traceId = traceId,
                     pauseFlag = pauseFlag,
                     cancelFlag = cancelFlag,
+                    lastUserMessage = lastUserMessage,
                 )
 
                 if (failed != null) {
@@ -124,14 +127,26 @@ class ExecutionScheduler(
                         eventPublisher.publishNodeRolledBack(traceId, nodeId)
                     }
                     monitor.setGraphStatus(graphId, GraphExecutionStatus.ROLLED_BACK)
-                    eventPublisher.publishGraphFailed(traceId, graphId, failed.code)
+                    eventPublisher.publishGraphFailed(
+                        traceId = traceId,
+                        graphId = graphId,
+                        errorCode = failed.code,
+                        userVisibleMessage = failed.userVisibleMessage,
+                    )
                     persistHistory(executionId, graphId, traceId, "rolled_back", startNanos)
                     return ExecutionResult.Failure(failed)
                 }
             }
 
             val completed = monitor.completedCount()
-            return completeGraph(traceId, graphId, executionId, startNanos, completed)
+            return completeGraph(
+                traceId,
+                graphId,
+                executionId,
+                startNanos,
+                completed,
+                lastUserMessage.get(),
+            )
         } finally {
             rollbackManager.clear()
         retryAttempts.clear()
@@ -146,6 +161,7 @@ class ExecutionScheduler(
         traceId: UUID,
         pauseFlag: AtomicBoolean,
         cancelFlag: AtomicBoolean,
+        lastUserMessage: AtomicReference<String?>,
     ): RuntimeError? = coroutineScope {
         val workerPool = WorkerPool(config.workerPoolSize, actionExecutor)
         val semaphore = Semaphore(workerPool.withPermits { it })
@@ -153,7 +169,7 @@ class ExecutionScheduler(
         val outcomes = batch.map { node ->
             async {
                 semaphore.withPermit {
-                    executeNode(node, graph, traceId, pauseFlag, cancelFlag)
+                    executeNode(node, graph, traceId, pauseFlag, cancelFlag, lastUserMessage)
                 }
             }
         }.awaitAll()
@@ -167,6 +183,7 @@ class ExecutionScheduler(
         traceId: UUID,
         pauseFlag: AtomicBoolean,
         cancelFlag: AtomicBoolean,
+        lastUserMessage: AtomicReference<String?>,
     ): NodeBatchOutcome {
         if (cancelFlag.get()) {
             monitor.transition(node.id, ExecutionNodeState.CANCELLED)
@@ -190,6 +207,9 @@ class ExecutionScheduler(
                 metrics.recordNodeSuccess(latencyMs)
                 rollbackManager.recordCompletion(node)
                 eventPublisher.publishNodeCompleted(traceId, node.id, latencyMs)
+                outcome.outputs["userMessage"]?.takeIf { it.isNotBlank() }?.let {
+                    lastUserMessage.set(it)
+                }
                 return NodeBatchOutcome.Success
             }
             is NodeExecutionOutcome.Failure -> {
@@ -256,6 +276,7 @@ class ExecutionScheduler(
         executionId: UUID,
         startNanos: Long,
         completedNodes: Int,
+        userMessage: String?,
     ): ExecutionResult {
         val durationMs = (System.nanoTime() - startNanos) / 1_000_000
         monitor.setGraphStatus(graphId, GraphExecutionStatus.COMPLETED)
@@ -274,7 +295,7 @@ class ExecutionScheduler(
                 )
             },
         )
-        return ExecutionResult.Success(completedNodes = completedNodes)
+        return ExecutionResult.Success(completedNodes = completedNodes, userMessage = userMessage)
     }
 
     private suspend fun cancelGraph(

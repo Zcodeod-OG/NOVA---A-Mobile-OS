@@ -14,6 +14,14 @@ object ModelAssetPaths {
     const val WHISPER_MODEL = "whisper-tiny.onnx"
 
     /**
+     * MediaPipe Gemma 3 1B IT int4 task bundle for grounded document Q&A.
+     * Not used by the stub ONNX generative path — MediaPipeLocalLlmEngine loads this.
+     * Source: litert-community/Gemma3-1B-IT (Hugging Face, gated — accept Gemma license).
+     */
+    const val GEMMA_TASK_MODEL = "Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task"
+    const val GEMMA_TASK_MIN_BYTES = 200_000_000L
+
+    /**
      * MobileCLIP-S0 image encoder ONNX export (~15 MB).
      * Input: pixel_values float32 [1, 3, 224, 224] NCHW, ImageNet-normalized RGB.
      * Output: image_embeds float32 [1, 512] (L2-normalized by runtime if needed).
@@ -25,6 +33,7 @@ object ModelAssetPaths {
     const val LLM_LIGHT_MODEL_VERSION = "llm-light-onnx-v1"
     const val LLM_FULL_MODEL_VERSION = "llm-full-onnx-v1"
     const val WHISPER_MODEL_VERSION = "whisper-tiny-onnx-v1"
+    const val GEMMA_TASK_MODEL_VERSION = "gemma-3-1b-it-int4-mediapipe-v1"
     const val IMAGE_EMBEDDING_MODEL_VERSION = "mobileclip-s0-image-onnx-v1"
 
     const val DEFAULT_EMBEDDING_DIMENSION = 384
@@ -54,6 +63,7 @@ object ModelAssetPaths {
     /** Fetched over HTTP on first run when network is available. */
     val REMOTE_DOWNLOAD = listOf(
         WHISPER_MODEL,
+        GEMMA_TASK_MODEL,
         LLM_LIGHT_MODEL,
         LLM_FULL_MODEL,
     )

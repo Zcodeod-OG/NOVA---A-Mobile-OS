@@ -10,6 +10,10 @@ data class ExecutionRequest(
 )
 
 sealed class ExecutionResult {
-    data class Success(val completedNodes: Int) : ExecutionResult()
+    data class Success(
+        val completedNodes: Int,
+        /** Optional user-facing message from the last capability node (e.g. WhatsApp auto-send). */
+        val userMessage: String? = null,
+    ) : ExecutionResult()
     data class Failure(val error: RuntimeError) : ExecutionResult()
 }

@@ -37,6 +37,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.onnxruntime.android)
     implementation(libs.mlkit.text.recognition)
+    implementation(libs.pdfbox.android)
+    implementation(libs.mediapipe.tasks.genai)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test.junit)

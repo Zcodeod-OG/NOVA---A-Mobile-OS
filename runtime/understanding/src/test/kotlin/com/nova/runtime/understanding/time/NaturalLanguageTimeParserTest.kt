@@ -45,4 +45,37 @@ class NaturalLanguageTimeParserTest {
         val resolved = NaturalLanguageTimeParser.resolveDate("set alarm for 7am tomorrow", base)
         assertEquals(base.plusDays(1), resolved)
     }
+
+    @Test
+    fun parseAlarmTriggerMillis_rollsPastTimesToNextDay() {
+        // 10:00 local — 7am today is already past → tomorrow 7am
+        val localNow = Instant.parse("2026-08-08T10:00:00Z")
+            .atZone(zone)
+            .withHour(10)
+            .withMinute(0)
+            .withSecond(0)
+            .withNano(0)
+            .toInstant()
+        val millis = NaturalLanguageTimeParser.parseAlarmTriggerMillis("set alarm for 7am", localNow)
+        assertNotNull(millis)
+        val target = Instant.ofEpochMilli(millis).atZone(zone)
+        assertEquals(7, target.hour)
+        assertTrue(target.toInstant().isAfter(localNow))
+        assertEquals(localNow.atZone(zone).toLocalDate().plusDays(1), target.toLocalDate())
+    }
+
+    @Test
+    fun parseAlarmTriggerMillis_wakeMePhrase() {
+        val localNow = Instant.parse("2026-08-08T22:00:00Z")
+            .atZone(zone)
+            .withHour(22)
+            .withMinute(0)
+            .toInstant()
+        val millis = NaturalLanguageTimeParser.parseAlarmTriggerMillis("wake me at 6:30", localNow)
+        assertNotNull(millis)
+        val target = Instant.ofEpochMilli(millis).atZone(zone)
+        assertEquals(6, target.hour)
+        assertEquals(30, target.minute)
+        assertTrue(target.toInstant().isAfter(localNow))
+    }
 }

@@ -51,6 +51,9 @@ class CapabilityEventPublisher(
         operation: String,
         latencyMs: Long,
         transactionId: UUID? = null,
+        userMessage: String? = null,
+        answer: String? = null,
+        matchDebug: String? = null,
     ) {
         publish(
             eventType = CapabilityEvents.EXECUTED,
@@ -61,6 +64,9 @@ class CapabilityEventPublisher(
                 put("operation", operation)
                 put("latencyMs", latencyMs.toString())
                 transactionId?.let { put("transactionId", it.toString()) }
+                userMessage?.takeIf { it.isNotBlank() }?.let { put("userMessage", it) }
+                answer?.takeIf { it.isNotBlank() }?.let { put("answer", it) }
+                matchDebug?.takeIf { it.isNotBlank() }?.let { put("matchDebug", it) }
             },
         )
     }

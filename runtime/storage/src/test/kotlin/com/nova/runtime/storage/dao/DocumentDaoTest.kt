@@ -6,8 +6,10 @@ import com.nova.runtime.storage.entities.EmbeddingEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.UUID
@@ -103,6 +105,100 @@ class DocumentDaoTest : StorageRobolectricTest() {
 
             assertEquals(1, results.size)
             assertEquals(unindexed.id, results.first().id)
+        }
+
+    @Test
+    fun listMissingContentText_returnsExtractableDocsWithoutContent() =
+        runTest {
+            val embeddingId = UUID.randomUUID()
+            database.embeddingDao().insert(
+                EmbeddingEntity(
+                    embeddingId = embeddingId,
+                    objectType = "document",
+                    objectId = UUID.randomUUID(),
+                    modelVersion = "test-v1",
+                    dimension = 384,
+                    createdAt = 1L,
+                ),
+            )
+            val needsBackfill = sampleDocument(
+                name = "menu.pdf",
+                path = "/docs/menu.pdf",
+                extension = "pdf",
+            ).copy(
+                mimeType = "application/pdf",
+                embeddingId = embeddingId,
+                contentText = null,
+            )
+            val alreadyExtracted = sampleDocument(name = "notes.txt").copy(
+                contentText = "hello",
+                contentExtractStatus = com.nova.runtime.storage.search.ContentExtractStatus.SUCCESS,
+            )
+            val imageNeedsOcr = sampleDocument(
+                name = "semester-timetable.png",
+                path = "/docs/semester-timetable.png",
+                extension = "png",
+            ).copy(mimeType = "image/png", contentText = null)
+            val failedNeedsRetry = sampleDocument(
+                name = "locked-menu.pdf",
+                path = "/docs/locked-menu.pdf",
+                extension = "pdf",
+            ).copy(
+                mimeType = "application/pdf",
+                contentText = "",
+                contentExtractStatus = com.nova.runtime.storage.search.ContentExtractStatus.FAILED,
+            )
+            val legacyDocSkip = sampleDocument(
+                name = "old-notes.doc",
+                path = "/docs/old-notes.doc",
+                extension = "doc",
+            ).copy(
+                mimeType = "application/msword",
+                contentText = null,
+                contentExtractStatus = com.nova.runtime.storage.search.ContentExtractStatus.NOT_TRIED,
+            )
+            val binarySkip = sampleDocument(
+                name = "archive.zip",
+                path = "/docs/archive.zip",
+                extension = "zip",
+            ).copy(mimeType = "application/zip", contentText = null)
+
+            documentDao.insert(needsBackfill)
+            documentDao.insert(alreadyExtracted)
+            documentDao.insert(imageNeedsOcr)
+            documentDao.insert(failedNeedsRetry)
+            documentDao.insert(legacyDocSkip)
+            documentDao.insert(binarySkip)
+
+            val results = documentDao.listMissingContentText(limit = 10)
+
+            assertEquals(3, results.size)
+            assertTrue(results.any { it.id == needsBackfill.id })
+            assertTrue(results.any { it.id == imageNeedsOcr.id })
+            assertTrue(results.any { it.id == failedNeedsRetry.id })
+            assertFalse(results.any { it.id == binarySkip.id })
+            assertFalse(results.any { it.id == legacyDocSkip.id })
+            assertFalse(results.any { it.id == alreadyExtracted.id })
+        }
+
+    @Test
+    fun listMissingSummary_returnsDocsWithoutSummary() =
+        runTest {
+            val missing = sampleDocument(name = "bookly.pdf").copy(
+                contentText = "BOOKLY PROSPECTUS",
+                summary = null,
+            )
+            val present = sampleDocument(name = "menu.pdf").copy(
+                contentText = "MENU",
+                summary = "menu.pdf: MENU",
+            )
+            documentDao.insert(missing)
+            documentDao.insert(present)
+
+            val results = documentDao.listMissingSummary(limit = 10)
+
+            assertEquals(1, results.size)
+            assertEquals(missing.id, results.first().id)
         }
 
     private fun sampleDocument(

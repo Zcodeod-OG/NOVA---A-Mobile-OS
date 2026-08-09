@@ -116,4 +116,82 @@ class AndroidCapabilityFrameworkIntegrationTest {
         assertTrue(result is CapabilityResult.Success)
         assertEquals("android-communication", (result as CapabilityResult.Success).output["providerId"])
     }
+
+    @Test
+    fun framework_pipelineShortFormAlarm_resolvesToAndroidTimeProvider() = runTest {
+        val framework = productionFramework()
+
+        val result = framework.execute(
+            CapabilityRequest(
+                capabilityType = "alarm",
+                operation = "create",
+                parameters = mapOf(
+                    "triggerAtMillis" to (System.currentTimeMillis() + 60_000L).toString(),
+                    "label" to "test",
+                ),
+                traceId = UUID.randomUUID(),
+            ),
+        )
+
+        assertTrue(
+            "Expected Success for alarm.create short form, got $result",
+            result is CapabilityResult.Success,
+        )
+        assertEquals("android-time", (result as CapabilityResult.Success).output["providerId"])
+        assertEquals(CapabilityOperations.ALARM_CREATE, result.output["operation"])
+    }
+
+    @Test
+    fun framework_pipelineShortFormWhatsApp_resolvesToAndroidCommunicationProvider() = runTest {
+        val framework = productionFramework()
+
+        val result = framework.execute(
+            CapabilityRequest(
+                capabilityType = "whatsapp",
+                operation = "send_message",
+                parameters = mapOf("message" to "hello"),
+                traceId = UUID.randomUUID(),
+            ),
+        )
+
+        assertTrue(
+            "Expected Success for whatsapp.send_message short form, got $result",
+            result is CapabilityResult.Success,
+        )
+        assertEquals("android-communication", (result as CapabilityResult.Success).output["providerId"])
+    }
+
+    @Test
+    fun framework_pipelineOpenApp_resolvesToAndroidDeviceProvider() = runTest {
+        val framework = productionFramework()
+
+        val result = framework.execute(
+            CapabilityRequest(
+                capabilityType = "device",
+                operation = "open_app",
+                parameters = mapOf("appName" to "settings"),
+                traceId = UUID.randomUUID(),
+            ),
+        )
+
+        assertTrue(
+            "Expected Success for device.open_app, got $result",
+            result is CapabilityResult.Success,
+        )
+        assertEquals("android-device", (result as CapabilityResult.Success).output["providerId"])
+    }
+
+    private fun productionFramework(): CapabilityFrameworkImpl {
+        val registry = DefaultCapabilityRegistry(productionCapabilityProviders(context, adapters, logger))
+        val lifecycle = DefaultCapabilityLifecycleManager(registry)
+        return CapabilityFrameworkImpl(
+            registry = registry,
+            resolver = DefaultCapabilityProviderResolver(registry, lifecycle),
+            lifecycleManager = lifecycle,
+            healthMonitor = DefaultCapabilityHealthMonitor(registry, lifecycle),
+            transactionManager = DefaultCapabilityTransactionManager(),
+            eventPublisher = CapabilityEventPublisher(eventBus),
+            logger = logger,
+        )
+    }
 }

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -50,6 +51,31 @@ class DocumentSearchServiceTest {
 
             assertEquals(0, page.count)
             assertEquals(0, page.totalCount)
+        }
+
+    @Test
+    fun search_ranksContentMatchAboveFilenameOnly() =
+        runTest {
+            val filenameOnly = sampleDocument(
+                name = "BooklyProspectusReport.pdf",
+                path = "/docs/bookly.pdf",
+            ).copy(contentText = "generic campus notes")
+            val contentMatch = sampleDocument(
+                name = "scan-042.pdf",
+                path = "/docs/scan.pdf",
+            ).copy(contentText = "BOOKLY PROSPECTUS REPORT placement outcomes")
+
+            dao.records[filenameOnly.id] = filenameOnly
+            dao.records[contentMatch.id] = contentMatch
+
+            val page = service.search(
+                SearchRequest(query = "bookly placement", limit = 10, offset = 0),
+                traceId = UUID.randomUUID(),
+            )
+
+            assertEquals(2, page.count)
+            assertEquals(contentMatch.id, page.items.first().id)
+            assertTrue(page.items.first().score > page.items.last().score)
         }
 
     private fun sampleDocument(
@@ -103,7 +129,9 @@ class DocumentSearchServiceTest {
                 .filter {
                     it.name.contains(query, ignoreCase = true) ||
                         it.path.contains(query, ignoreCase = true) ||
-                        it.extension.contains(query, ignoreCase = true)
+                        it.extension.contains(query, ignoreCase = true) ||
+                        it.summary.orEmpty().contains(query, ignoreCase = true) ||
+                        it.contentText.orEmpty().contains(query, ignoreCase = true)
                 }
                 .sortedByDescending { it.modifiedAt }
                 .drop(offset)
@@ -113,7 +141,9 @@ class DocumentSearchServiceTest {
             records.values.count {
                 it.name.contains(query, ignoreCase = true) ||
                     it.path.contains(query, ignoreCase = true) ||
-                    it.extension.contains(query, ignoreCase = true)
+                    it.extension.contains(query, ignoreCase = true) ||
+                    it.summary.orEmpty().contains(query, ignoreCase = true) ||
+                    it.contentText.orEmpty().contains(query, ignoreCase = true)
             }
 
         override suspend fun getByProjectId(projectId: UUID): List<DocumentEntity> =
@@ -121,5 +151,14 @@ class DocumentSearchServiceTest {
 
         override suspend fun listUnindexed(limit: Int): List<DocumentEntity> =
             records.values.filter { it.embeddingId == null }.take(limit)
+        override suspend fun listMissingContentText(limit: Int): List<DocumentEntity> =
+            records.values.filter { it.contentText == null }.take(limit)
+        override suspend fun listMissingSummary(limit: Int): List<DocumentEntity> =
+            records.values.filter { it.summary == null }.take(limit)
+        override suspend fun countAll() = records.size
+        override suspend fun countWithSummary() =
+            records.values.count { !it.summary.isNullOrBlank() }
+        override suspend fun countMissingSummary() =
+            records.values.count { it.summary.isNullOrBlank() }
     }
 }

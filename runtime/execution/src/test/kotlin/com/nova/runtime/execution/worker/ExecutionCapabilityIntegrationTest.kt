@@ -70,9 +70,10 @@ class ExecutionCapabilityIntegrationTest {
 
         val outcome = executor.execute(node, traceId)
 
-        assertIs<NodeExecutionOutcome.Success>(outcome)
-        assertEquals("stub-time", outcome.outputs["providerId"])
-        assertEquals("Meeting", outcome.outputs["title"])
+        assertIs<NodeExecutionOutcome.Failure>(outcome)
+        assertEquals("CAPABILITY_STUB_ONLY", outcome.error.code)
+        assertEquals(false, outcome.retryable)
+        assertTrue(outcome.error.userVisibleMessage.contains("time"))
         assertTrue(CapabilityEvents.EXECUTED in events)
     }
 }

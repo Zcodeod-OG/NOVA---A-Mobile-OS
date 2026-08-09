@@ -70,6 +70,23 @@ class StubCapabilityActionExecutor(
             )
         ) {
             is CapabilityResult.Success -> {
+                if (isStubOnlyOutput(result.output)) {
+                    return NodeExecutionOutcome.Failure(
+                        error = RuntimeError(
+                            code = "CAPABILITY_STUB_ONLY",
+                            category = ErrorCategory.INFRASTRUCTURE,
+                            severity = ErrorSeverity.HIGH,
+                            recoverable = false,
+                            userVisibleMessage = stubOnlyUserMessage(capabilityType, operation),
+                            diagnostics = mapOf(
+                                "capabilityType" to capabilityType,
+                                "operation" to operation,
+                                "providerId" to (result.output["providerId"] ?: "unknown"),
+                            ),
+                        ),
+                        retryable = false,
+                    )
+                }
                 return NodeExecutionOutcome.Success(result.output.ifEmpty { node.outputs })
             }
             is CapabilityResult.Failure -> {
@@ -105,6 +122,24 @@ class StubCapabilityActionExecutor(
 
     companion object {
         private val CAPABILITY_ACTION_TYPES = setOf("execute_capability")
+
+        private fun isStubOnlyOutput(output: Map<String, String>): Boolean =
+            output["status"] == "stub_executed" ||
+                output["stub"] == "true"
+
+        private fun stubOnlyUserMessage(capabilityType: String, operation: String): String =
+            when {
+                capabilityType.startsWith("search") ->
+                    "Document search isn't wired on this device — check indexing and All files access"
+                capabilityType == "whatsapp" || operation.contains("whatsapp") ->
+                    "WhatsApp send isn't available — grant Contacts and enable NOVA in Accessibility"
+                capabilityType == "alarm" || (operation == "create" && capabilityType == "time") ->
+                    "Alarm couldn't be set — grant exact alarm permission in Clock settings"
+                capabilityType == "device" ->
+                    "Couldn't open the app on this device"
+                else ->
+                    "Action unavailable on device ($capabilityType.$operation)"
+            }
     }
 }
 

@@ -32,7 +32,10 @@ class StubDeviceProvider :
         providerId = "stub-device",
         capabilityType = "device",
         version = "1.0.0",
-        operations = setOf("execute", "query", "configure", "rollback"),
+        operations = setOf(
+            "execute", "query", "configure", "rollback",
+            "open_app", "device.open_app", "app_search", "device.app_search",
+        ),
     )
 
 class StubTimeProvider :
@@ -60,6 +63,41 @@ class StubSearchProvider :
         operations = setOf("photos", "documents", "semantic", "rollback"),
         permissions = setOf("nova.search"),
         description = "Stub unified search provider",
+    )
+
+/**
+ * Matches real DocumentSearchCapabilityProvider (`search.documents` + `search`) and
+ * also accepts the legacy pipeline op name (`documents`) used when NIR resolves
+ * `search.documents` into capabilityType=search / operation=documents.
+ */
+class StubDocumentSearchProvider :
+    StubCapabilityProvider(
+        providerId = "stub-search-documents",
+        capabilityType = "search.documents",
+        version = "1.0.0",
+        operations = setOf("search", "documents", "rollback"),
+        permissions = setOf("nova.search"),
+        description = "Stub document search provider",
+    )
+
+class StubPhotoSearchProvider :
+    StubCapabilityProvider(
+        providerId = "stub-search-photos",
+        capabilityType = "search.photos",
+        version = "1.0.0",
+        operations = setOf("search", "photos", "rollback"),
+        permissions = setOf("nova.search"),
+        description = "Stub photo search provider",
+    )
+
+class StubSemanticSearchProvider :
+    StubCapabilityProvider(
+        providerId = "stub-search-semantic",
+        capabilityType = "search.semantic",
+        version = "1.0.0",
+        operations = setOf("search", "semantic", "rollback"),
+        permissions = setOf("nova.search"),
+        description = "Stub semantic search provider",
     )
 
 class StubWhatsappProvider :
@@ -121,6 +159,9 @@ fun defaultStubProviders(): List<CapabilityProvider> =
         StubTimeProvider(),
         StubNotificationProvider(),
         StubSearchProvider(),
+        StubDocumentSearchProvider(),
+        StubPhotoSearchProvider(),
+        StubSemanticSearchProvider(),
         StubWhatsappProvider(),
         StubAlarmProvider(),
         StubCalendarProvider(),

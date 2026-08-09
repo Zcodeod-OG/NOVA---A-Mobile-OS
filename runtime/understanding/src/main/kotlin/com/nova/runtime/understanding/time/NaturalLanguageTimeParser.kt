@@ -30,9 +30,9 @@ object NaturalLanguageTimeParser {
         val zonedNow = now.atZone(zone)
         val time = parseTime(payload) ?: return null
         var target = ZonedDateTime.of(resolveDate(payload, zonedNow.toLocalDate()), time, zone)
-        if (target.toInstant().isBefore(now) && !payload.contains("tomorrow")) {
-            target = target.plusDays(1)
-        }
+        // Past (or equal) wall-clock times roll to the next day unless the user said "tomorrow"
+        // or named a future weekday via resolveDate.
+        target = rollForwardIfPast(target, now, payload)
         return target.toInstant().toEpochMilli()
     }
 
@@ -42,9 +42,7 @@ object NaturalLanguageTimeParser {
         val title = extractEventTitle(payload)
         val time = parseTime(payload) ?: LocalTime.of(9, 0)
         var start = ZonedDateTime.of(resolveDate(payload, zonedNow.toLocalDate()), time, zone)
-        if (start.toInstant().isBefore(now) && !payload.contains("tomorrow")) {
-            start = start.plusDays(1)
-        }
+        start = rollForwardIfPast(start, now, payload)
         val end = start.plusHours(1)
         return ParsedCalendarEvent(
             title = title,
@@ -74,6 +72,24 @@ object NaturalLanguageTimeParser {
 
         if (hour !in 0..23 || minute !in 0..59) return null
         return LocalTime.of(hour, minute)
+    }
+
+    /**
+     * If the computed instant is not in the future, advance by one day.
+     * Skips when the user explicitly said "tomorrow" (already applied in [resolveDate]).
+     */
+    private fun rollForwardIfPast(
+        target: ZonedDateTime,
+        now: Instant,
+        payload: String,
+    ): ZonedDateTime {
+        if (payload.lowercase().contains("tomorrow")) return target
+        var rolled = target
+        // !isAfter covers equal-to-now (would fire immediately / appear broken).
+        while (!rolled.toInstant().isAfter(now)) {
+            rolled = rolled.plusDays(1)
+        }
+        return rolled
     }
 
     internal fun resolveDate(payload: String, base: LocalDate): LocalDate {

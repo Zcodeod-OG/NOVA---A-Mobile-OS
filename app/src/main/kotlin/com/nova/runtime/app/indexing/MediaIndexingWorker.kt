@@ -10,6 +10,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import com.nova.runtime.ai.native.ingestion.FullDeviceIndexer
 import com.nova.runtime.events.EventBus
 import com.nova.runtime.events.RuntimeEvent
@@ -31,15 +32,18 @@ class MediaIndexingWorker(
 
     override suspend fun doWork(): Result {
         val traceId = UUID.randomUUID()
-        eventBus.publish(
-            RuntimeEvent(
-                traceId = traceId,
-                sourceModule = RuntimeModule.STORAGE,
-                eventType = StorageEvents.INDEXING_STARTED,
-                priority = EventPriority.NORMAL,
-                payload = mapOf("message" to "Background media indexing batch started"),
-            ),
-        )
+        // Only announce once per cycle — chaining batches must not spam STARTED.
+        if (inputData.getBoolean(KEY_ANNOUNCE_START, false)) {
+            eventBus.publish(
+                RuntimeEvent(
+                    traceId = traceId,
+                    sourceModule = RuntimeModule.STORAGE,
+                    eventType = StorageEvents.INDEXING_STARTED,
+                    priority = EventPriority.NORMAL,
+                    payload = mapOf("message" to "Indexing gallery, downloads, and documents…"),
+                ),
+            )
+        }
 
         return runCatching { indexer.runBatch() }
             .fold(
@@ -47,6 +51,17 @@ class MediaIndexingWorker(
                     if (batch.hasMore) {
                         MediaIndexingScheduler.enqueueNextBatch(applicationContext)
                     } else {
+                        val summaryLine =
+                            if (batch.documentsTotal > 0) {
+                                if (batch.summariesPending <= 0) {
+                                    " Summaries ${batch.summariesReady}/${batch.documentsTotal}."
+                                } else {
+                                    " Summaries ${batch.summariesReady}/${batch.documentsTotal} " +
+                                        "(${batch.summariesPending} backfilling)."
+                                }
+                            } else {
+                                ""
+                            }
                         eventBus.publish(
                             RuntimeEvent(
                                 traceId = traceId,
@@ -55,8 +70,13 @@ class MediaIndexingWorker(
                                 priority = EventPriority.NORMAL,
                                 payload =
                                     mapOf(
-                                        "message" to "Full-device indexing cycle complete (${batch.totalIndexed} items indexed)",
+                                        "message" to
+                                            "Indexing complete · Documents+Downloads · ${batch.totalIndexed} items.$summaryLine",
                                         "totalIndexed" to batch.totalIndexed.toString(),
+                                        "summariesReady" to batch.summariesReady.toString(),
+                                        "summariesPending" to batch.summariesPending.toString(),
+                                        "documentsTotal" to batch.documentsTotal.toString(),
+                                        "hasMore" to "false",
                                     ),
                             ),
                         )
@@ -72,13 +92,17 @@ class MediaIndexingWorker(
                             priority = EventPriority.NORMAL,
                             payload =
                                 mapOf(
-                                    "message" to "Indexing batch failed: ${error.message ?: "unknown error"}",
+                                    "message" to "Indexing failed: ${error.message ?: "unknown error"}",
                                 ),
                         ),
                     )
                     Result.retry()
                 },
             )
+    }
+
+    companion object {
+        const val KEY_ANNOUNCE_START = "announce_start"
     }
 }
 
@@ -87,13 +111,14 @@ object MediaIndexingScheduler {
     private const val UNIQUE_PERIODIC_WORK = "nova_media_indexing_periodic"
 
     fun startFullIndexing(context: Context) {
-        enqueueNextBatch(context)
+        enqueueNextBatch(context, announceStart = true)
         schedulePeriodic(context)
     }
 
-    fun enqueueNextBatch(context: Context) {
+    fun enqueueNextBatch(context: Context, announceStart: Boolean = false) {
         val request =
             OneTimeWorkRequestBuilder<MediaIndexingWorker>()
+                .setInputData(workDataOf(MediaIndexingWorker.KEY_ANNOUNCE_START to announceStart))
                 .setConstraints(defaultConstraints())
                 .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
@@ -106,6 +131,7 @@ object MediaIndexingScheduler {
     private fun schedulePeriodic(context: Context) {
         val request =
             PeriodicWorkRequestBuilder<MediaIndexingWorker>(6, TimeUnit.HOURS)
+                .setInputData(workDataOf(MediaIndexingWorker.KEY_ANNOUNCE_START to true))
                 .setConstraints(defaultConstraints())
                 .build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(

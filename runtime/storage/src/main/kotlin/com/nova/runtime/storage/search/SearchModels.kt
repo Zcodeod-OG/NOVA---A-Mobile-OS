@@ -56,6 +56,14 @@ data class DocumentSearchHit(
     val mimeType: String,
     val modifiedAt: Long,
     val score: Float = 1f,
+    /** Plain-text excerpt of the document content relevant to the query (e.g. today's menu section). */
+    val contentSnippet: String? = null,
+    /** Stage A discovery summary (not used for answers). */
+    val summary: String? = null,
+    /** Full extracted body length (not snippet length) for debug/status. */
+    val contentCharCount: Int = 0,
+    /** See [ContentExtractStatus]. */
+    val contentExtractStatus: String? = null,
 )
 
 data class SemanticSearchHit(
@@ -64,4 +72,14 @@ data class SemanticSearchHit(
     val score: Float,
     val title: String,
     val snippet: String?,
+    /** Plain-text excerpt of the document content relevant to the query (e.g. today's menu section). */
+    val contentSnippet: String? = null,
+    /** Stage A discovery summary (not used for answers). */
+    val summary: String? = null,
+    /** Document last-modified millis when [objectType] is a document; used for source attribution. */
+    val modifiedAt: Long? = null,
+    /** Full extracted body length (not snippet length) for debug/status. */
+    val contentCharCount: Int = 0,
+    /** See [ContentExtractStatus]. */
+    val contentExtractStatus: String? = null,
 )

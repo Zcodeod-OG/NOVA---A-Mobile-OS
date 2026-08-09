@@ -92,5 +92,14 @@ class DocumentRepositoryTest {
 
         override suspend fun listUnindexed(limit: Int): List<DocumentEntity> =
             records.values.filter { it.embeddingId == null }.take(limit)
+        override suspend fun listMissingContentText(limit: Int): List<DocumentEntity> =
+            records.values.filter { it.contentText == null }.take(limit)
+        override suspend fun listMissingSummary(limit: Int): List<DocumentEntity> =
+            records.values.filter { it.summary == null }.take(limit)
+        override suspend fun countAll() = records.size
+        override suspend fun countWithSummary() =
+            records.values.count { !it.summary.isNullOrBlank() }
+        override suspend fun countMissingSummary() =
+            records.values.count { it.summary.isNullOrBlank() }
     }
 }

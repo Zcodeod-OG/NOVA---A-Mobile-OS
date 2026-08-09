@@ -178,12 +178,19 @@ class CognitivePipelineOrchestratorTest {
             "Expected $expectedOperation but got ${result.capabilityOperation}",
         )
         assertTrue(result.completedNodes > 0, "Expected at least one node executed")
+        val expectedShortOp = expectedOperation.substringAfter(".")
         assertTrue(
             result.graph.actionNodes.any { node ->
-                node.actionType == "execute_capability" &&
-                    node.inputs["operation"] == expectedOperation.substringAfter(".")
+                if (node.actionType != "execute_capability") return@any false
+                val op = node.inputs["operation"]
+                val capabilityType = node.inputs["capabilityType"]
+                val capabilityOperation = node.inputs["capabilityOperation"]
+                op == expectedShortOp ||
+                    op == "search" && expectedOperation.startsWith("search.") ||
+                    capabilityType == expectedOperation ||
+                    capabilityOperation == expectedOperation
             },
-            "Expected execute_capability node with operation ${expectedOperation.substringAfter(".")}",
+            "Expected execute_capability node for $expectedOperation, nodes=${result.graph.actionNodes.map { it.inputs }}",
         )
     }
 
@@ -193,6 +200,32 @@ class CognitivePipelineOrchestratorTest {
         val result = createOrchestrator().processUserCommand(command, UUID.randomUUID().toString())
         assertIs<PipelineResult.Success>(result)
         assertTrue(result.capabilityOperation == expectedOperation)
+    }
+
+    @ParameterizedTest
+    @MethodSource("negatedCommands")
+    fun processUserCommand_negatedCommand_executesNothing(command: String) = runTest {
+        val result = createOrchestrator().processUserCommand(command, UUID.randomUUID().toString())
+
+        assertIs<PipelineResult.Success>(result, "Negated command '$command' failed: $result")
+        assertTrue(result.completedNodes == 0, "Expected no nodes executed for '$command'")
+        assertTrue(result.graph.actionNodes.isEmpty(), "Expected empty action graph for '$command'")
+        assertTrue(result.summary.startsWith("Okay"), "Expected acknowledgement summary, got: ${result.summary}")
+    }
+
+    @org.junit.jupiter.api.Test
+    fun processUserCommand_openCommandVsNegatedOpen_differ() = runTest {
+        val orchestrator = createOrchestrator()
+
+        val open = orchestrator.processUserCommand("open youtube", UUID.randomUUID().toString())
+        assertIs<PipelineResult.Success>(open)
+        assertTrue(open.capabilityOperation == NovaCapabilityOperations.DEVICE_OPEN_APP)
+        assertTrue(open.completedNodes > 0)
+
+        val negated = orchestrator.processUserCommand("do not open youtube", UUID.randomUUID().toString())
+        assertIs<PipelineResult.Success>(negated)
+        assertTrue(negated.capabilityOperation == "none")
+        assertTrue(negated.completedNodes == 0)
     }
 
     companion object {
@@ -230,6 +263,34 @@ class CognitivePipelineOrchestratorTest {
                 "share file report.pdf",
                 NovaCapabilityOperations.SHARE_FILE,
             ),
+            Arguments.of(
+                "open youtube",
+                NovaCapabilityOperations.DEVICE_OPEN_APP,
+            ),
+            Arguments.of(
+                "open youtube and search shape of you",
+                NovaCapabilityOperations.DEVICE_APP_SEARCH,
+            ),
+            Arguments.of(
+                "remind me to call mom at 5pm",
+                NovaCapabilityOperations.ALARM_CREATE,
+            ),
+            Arguments.of(
+                "send todays mess menu to atharv on whatsapp",
+                NovaCapabilityOperations.WHATSAPP_SEND_MESSAGE,
+            ),
+            Arguments.of(
+                "play shape of you on spotify",
+                NovaCapabilityOperations.DEVICE_APP_SEARCH,
+            ),
+        )
+
+        @JvmStatic
+        fun negatedCommands(): Stream<Arguments> = Stream.of(
+            Arguments.of("do not open youtube"),
+            Arguments.of("don't open youtube"),
+            Arguments.of("never open youtube"),
+            Arguments.of("do not set an alarm for 7am"),
         )
     }
 }

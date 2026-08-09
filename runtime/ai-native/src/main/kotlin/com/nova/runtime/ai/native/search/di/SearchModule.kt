@@ -1,9 +1,13 @@
 package com.nova.runtime.ai.native.search.di
 
+import com.nova.runtime.ai.model.DocumentTextExtractor
+import com.nova.runtime.ai.model.LocalLlmEngine
 import com.nova.runtime.ai.native.indexing.EmbeddingIndexer
 import com.nova.runtime.ai.native.ingestion.FullDeviceIndexer
 import com.nova.runtime.ai.native.ingestion.IndexingCheckpointStore
 import com.nova.runtime.ai.native.ingestion.MediaStoreIngestionService
+import com.nova.runtime.ai.native.llm.MediaPipeLocalLlmEngine
+import com.nova.runtime.ai.native.search.GroundedDocumentAnswerService
 import com.nova.runtime.ai.native.search.SearchIndexPipeline
 import com.nova.runtime.ai.native.search.SemanticSearchService
 import com.nova.runtime.ai.native.search.provider.DocumentSearchCapabilityProvider
@@ -33,6 +37,7 @@ val searchModule = module {
             photoRepository = get(),
             documentRepository = get(),
             photoImageLoader = get(),
+            documentTextExtractor = get<DocumentTextExtractor>(),
         )
     }
 
@@ -60,6 +65,7 @@ val searchModule = module {
             checkpointStore = get(),
             eventBus = get(),
             logger = get(),
+            documentDao = get(),
         )
     }
 
@@ -70,12 +76,21 @@ val searchModule = module {
             vectorIndex = get(),
             photoRepository = get(),
             documentRepository = get(),
+            documentDao = get(),
             searchIndexPipeline = get(),
             mediaStoreIngestionService = get(),
             fullDeviceIndexer = get(),
             logger = get(),
         )
     }
+
+    single<LocalLlmEngine> {
+        MediaPipeLocalLlmEngine(
+            context = androidContext(),
+            modelLoader = get(),
+        )
+    }
+    single { GroundedDocumentAnswerService(localLlmEngine = get()) }
 
     single {
         PhotoSearchCapabilityProvider(
@@ -87,6 +102,8 @@ val searchModule = module {
         DocumentSearchCapabilityProvider(
             documentSearchService = get(),
             semanticSearchService = get(),
+            documentRepository = get(),
+            groundedAnswerService = get(),
         )
     }
     single { SemanticSearchCapabilityProvider(semanticSearchService = get()) }

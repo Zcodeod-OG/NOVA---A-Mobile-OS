@@ -22,8 +22,9 @@ This guide covers collaborator onboarding, model inventory, install paths, and t
 | File | Size | Role | Shipped in git? | First-run download? |
 |------|------|------|-----------------|---------------------|
 | `embedding-mini.onnx` | ~86 MB | Text embeddings (384-dim, all-MiniLM-L6-v2) | **Yes** — `app/src/main/assets/models/` | Copied from assets |
-| `llm-light.onnx` | ~480 MB | Tier-1 generative inference (Qwen2.5-0.5B Q4) | No | Yes |
-| `llm-full.onnx` | ~1.2 GB | Tier-2 generative inference (Qwen2.5-1.5B Q4) | No | Yes |
+| `llm-light.onnx` | ~480 MB | Tier-1 ONNX generative (decode still limited) | No | Yes |
+| `llm-full.onnx` | ~1.2 GB | Tier-2 ONNX generative (decode still limited) | No | Yes |
+| `Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task` | ~500 MB+ | MediaPipe LLM for **grounded document Q&A** | No | Yes (HF gated) |
 | `whisper-tiny.onnx` | ~40 MB | Offline ASR (Whisper tiny.en) | No | Yes |
 | `image-encoder.onnx` | TBD | Visual embeddings for photo search | No (planned) | Yes (when available) |
 
@@ -61,6 +62,7 @@ All models load from the app's private files directory:
 ```
 /data/data/com.nova.runtime.app/files/models/
   embedding-mini.onnx
+  Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task   # grounded document Q&A (MediaPipe)
   llm-light.onnx
   llm-full.onnx
   whisper-tiny.onnx
@@ -99,7 +101,8 @@ Requires `curl` and `huggingface-cli` (`pip install 'huggingface_hub[cli]'`):
 
 ```bash
 ./scripts/download-whisper-onnx.sh   # ~40 MB  → assets/models/
-./scripts/download-llm-onnx.sh       # ~1.7 GB → assets/models/
+./scripts/download-gemma-task.sh     # MediaPipe Gemma for grounded doc Q&A (accept Gemma license on HF)
+./scripts/download-llm-onnx.sh       # ~1.7 GB → assets/models/ (optional ONNX tiers)
 ```
 
 #### Path B — Copy from an existing model directory
@@ -186,6 +189,7 @@ App launch
 
 | Script | Models | Destination |
 |--------|--------|-------------|
+| `scripts/download-gemma-task.sh` | `Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task` | `app/src/main/assets/models/` (copied to `filesDir/models/` on first use) |
 | `scripts/download-whisper-onnx.sh` | `whisper-tiny.onnx` | `app/src/main/assets/models/` |
 | `scripts/download-llm-onnx.sh` | `llm-light.onnx`, `llm-full.onnx` | `app/src/main/assets/models/` |
 | `scripts/setup-models.sh` | Copies large models from a local dir | `app/src/main/assets/models/` |
@@ -193,8 +197,9 @@ App launch
 HuggingFace sources match the first-run download URLs:
 
 - Whisper: `onnx-community/whisper-tiny.en` → `onnx/model.onnx`
-- LLM light: `onnx-community/Qwen2.5-0.5B-Instruct` → `onnx/model_q4f16.onnx`
-- LLM full: `onnx-community/Qwen2.5-1.5B-Instruct` → `onnx/model_q4.onnx`
+- LLM light: `onnx-community/Qwen2.5-0.5B-Instruct` → `onnx/model_q4f16.onnx` (general inference stub — **not** used for document Q&A)
+- LLM full: `onnx-community/Qwen2.5-1.5B-Instruct` → `onnx/model_q4.onnx` (general inference stub — **not** used for document Q&A)
+- Gemma task: `litert-community/Gemma3-1B-IT` → `Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task` (grounded document rewrite via MediaPipe)
 
 ---
 
@@ -206,6 +211,8 @@ HuggingFace sources match the first-run download URLs:
 | Voice commands fail immediately | `whisper-tiny.onnx` not installed | Run `./scripts/download-whisper-onnx.sh` or wait for first-run download |
 | Search returns poor / no semantic matches | Embedding model or tokenizer missing | Ensure `embedding-mini.onnx` + tokenizer assets are present |
 | LLM responses are rule-based stubs | `llm-light.onnx` / `llm-full.onnx` missing | Download LLM models; check `files/models/` |
+| Document Q&A invents schedules | Wrong file indexed (e.g. toy `weekly_timetable.txt`) or empty OCR | Delete stubs from Downloads; grant All files access; wait for reindex; answers must cite real `contentText` |
+| Document Q&A stays extractive (no rewrite) | Gemma `.task` missing | Run `./scripts/download-gemma-task.sh` (HF Gemma license) or wait for first-run download; extractive grounded answers still work without it |
 | Photo search misses visual queries | `image-encoder.onnx` not yet available | Expected until multimodal support ships; OCR text search still works |
 | Out of storage during download | ~2 GB total for all models | Free space or install subset via `adb push` |
 
