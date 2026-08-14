@@ -16,6 +16,8 @@ import com.nova.runtime.storage.repository.EmbeddingRepository
 import com.nova.runtime.storage.repository.EmbeddingRepositoryImpl
 import com.nova.runtime.storage.repository.ExecutionHistoryRepository
 import com.nova.runtime.storage.repository.ExecutionHistoryRepositoryImpl
+import com.nova.runtime.storage.repository.MessageRepository
+import com.nova.runtime.storage.repository.MessageRepositoryImpl
 import com.nova.runtime.storage.repository.PhotoRepository
 import com.nova.runtime.storage.repository.PhotoRepositoryImpl
 import com.nova.runtime.storage.repository.PreferenceRepository
@@ -25,6 +27,7 @@ import com.nova.runtime.storage.repository.ProjectRepositoryImpl
 import com.nova.runtime.storage.repository.SessionRepository
 import com.nova.runtime.storage.repository.SessionRepositoryImpl
 import com.nova.runtime.storage.coordinator.StorageCoordinator
+import com.nova.runtime.storage.profile.ProfilePreferencesStore
 import com.nova.runtime.storage.search.DocumentSearchService
 import com.nova.runtime.storage.vector.NoOpVectorIndex
 import com.nova.runtime.storage.vector.VectorIndex
@@ -42,6 +45,7 @@ fun storageModule(context: Context) =
         single { get<NovaDatabase>().preferenceDao() }
         single { get<NovaDatabase>().executionHistoryDao() }
         single { get<NovaDatabase>().embeddingDao() }
+        single { get<NovaDatabase>().messageDao() }
 
         single<DocumentRepository> { DocumentRepositoryImpl(get()) }
         single<PhotoRepository> { PhotoRepositoryImpl(get()) }
@@ -51,6 +55,8 @@ fun storageModule(context: Context) =
         single<PreferenceRepository> { PreferenceRepositoryImpl(get()) }
         single<ExecutionHistoryRepository> { ExecutionHistoryRepositoryImpl(get()) }
         single<EmbeddingRepository> { EmbeddingRepositoryImpl(get()) }
+        single<MessageRepository> { MessageRepositoryImpl(get()) }
+        single { ProfilePreferencesStore(get()) }
 
         single { DocumentSearchService(documentDao = get(), logger = get()) }
 

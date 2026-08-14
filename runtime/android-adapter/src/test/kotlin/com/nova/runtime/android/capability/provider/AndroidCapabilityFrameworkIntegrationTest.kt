@@ -64,7 +64,7 @@ class AndroidCapabilityFrameworkIntegrationTest {
 
     @Test
     fun framework_resolvesAndroidProviderForWhatsAppSend() = runTest {
-        val registry = DefaultCapabilityRegistry(productionCapabilityProviders(context, adapters, logger))
+        val registry = DefaultCapabilityRegistry(productionCapabilityProvidersForTest(context, adapters, logger))
         val lifecycle = DefaultCapabilityLifecycleManager(registry)
         val framework = CapabilityFrameworkImpl(
             registry = registry,
@@ -92,7 +92,7 @@ class AndroidCapabilityFrameworkIntegrationTest {
 
     @Test
     fun framework_prefersAndroidProviderOverStubForContactsSearch() = runTest {
-        val registry = DefaultCapabilityRegistry(productionCapabilityProviders(context, adapters, logger))
+        val registry = DefaultCapabilityRegistry(productionCapabilityProvidersForTest(context, adapters, logger))
         val lifecycle = DefaultCapabilityLifecycleManager(registry)
         val framework = CapabilityFrameworkImpl(
             registry = registry,
@@ -182,7 +182,7 @@ class AndroidCapabilityFrameworkIntegrationTest {
     }
 
     private fun productionFramework(): CapabilityFrameworkImpl {
-        val registry = DefaultCapabilityRegistry(productionCapabilityProviders(context, adapters, logger))
+        val registry = DefaultCapabilityRegistry(productionCapabilityProvidersForTest(context, adapters, logger))
         val lifecycle = DefaultCapabilityLifecycleManager(registry)
         return CapabilityFrameworkImpl(
             registry = registry,

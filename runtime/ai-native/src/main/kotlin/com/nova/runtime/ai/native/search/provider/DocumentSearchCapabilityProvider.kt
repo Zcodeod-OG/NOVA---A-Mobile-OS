@@ -30,6 +30,10 @@ class DocumentSearchCapabilityProvider(
 
     override suspend fun executeSearch(request: CapabilityExecutionRequest): CapabilityExecutionResponse {
         val searchRequest = parseSearchRequest(request.parameters)
+        val answerMode = request.parameters["answerMode"] ?: GroundedDocumentAnswerService.ANSWER_MODE_QA
+        val displayMode = request.parameters["displayMode"] ?: DocumentDateIntelligence.DISPLAY_MODE_SCOPED
+        val maxDisplayChars = request.parameters["maxDisplayChars"]?.toIntOrNull()
+            ?: DocumentDateIntelligence.DEFAULT_EXTRACT_CHARS
 
         val semanticPage = semanticSearchService.search(
             request = searchRequest,
@@ -56,6 +60,10 @@ class DocumentSearchCapabilityProvider(
                     contentSnippet = top.contentSnippet,
                     sourceFileName = top.title,
                     sourceModifiedAt = top.modifiedAt,
+                    answerMode = answerMode,
+                    displayMode = displayMode,
+                    maxDisplayChars = maxDisplayChars,
+                    documentContent = topDoc?.contentText,
                 ),
             )
         }
@@ -82,6 +90,10 @@ class DocumentSearchCapabilityProvider(
                     contentSnippet = topKeyword?.contentSnippet,
                     sourceFileName = topKeyword?.name,
                     sourceModifiedAt = topKeyword?.modifiedAt,
+                    answerMode = answerMode,
+                    displayMode = displayMode,
+                    maxDisplayChars = maxDisplayChars,
+                    documentContent = keywordDoc?.contentText,
                 )
             },
         )
@@ -93,24 +105,46 @@ class DocumentSearchCapabilityProvider(
         contentSnippet: String?,
         sourceFileName: String?,
         sourceModifiedAt: Long?,
+        answerMode: String = GroundedDocumentAnswerService.ANSWER_MODE_QA,
+        displayMode: String = DocumentDateIntelligence.DISPLAY_MODE_SCOPED,
+        maxDisplayChars: Int = DocumentDateIntelligence.DEFAULT_EXTRACT_CHARS,
+        documentContent: String? = null,
     ): Map<String, String> {
-        val snippet = contentSnippet?.takeIf { it.isNotBlank() }
+        val isExtract = answerMode == GroundedDocumentAnswerService.ANSWER_MODE_EXTRACT
+        var snippet = contentSnippet?.takeIf { it.isNotBlank() }
+        if (isExtract && !documentContent.isNullOrBlank()) {
+            snippet = DocumentDateIntelligence.extractExactSection(
+                query = query,
+                content = documentContent,
+                maxChars = maxDisplayChars,
+                displayMode = displayMode,
+            ) ?: snippet
+        }
         if (snippet == null) {
+            val failure = if (isExtract) {
+                DocumentDateIntelligence.narrowScopeFailureMessage(query) +
+                    sourceFileName?.let { " — from $it" }.orEmpty()
+            } else {
+                unclearSectionMessage(query, sourceFileName, sourceModifiedAt)
+            }
             return encoded + mapOf(
-                "userMessage" to unclearSectionMessage(query, sourceFileName, sourceModifiedAt),
+                "userMessage" to failure,
+                "answerMode" to answerMode,
             )
         }
         val existing = encoded["userMessage"]
         if (!existing.isNullOrBlank() &&
-            looksFabricatedRefusalNeeded(existing, contentSnippet, query)
+            looksFabricatedRefusalNeeded(existing, snippet, query)
         ) {
             return encoded + mapOf(
                 "userMessage" to unclearSectionMessage(query, sourceFileName, sourceModifiedAt),
+                "answerMode" to answerMode,
             )
         }
         if (!DocumentContentNormalizer.isGroundedAnswerable(snippet)) {
             return encoded + mapOf(
                 "userMessage" to unclearSectionMessage(query, sourceFileName, sourceModifiedAt),
+                "answerMode" to answerMode,
             )
         }
         val answer = groundedAnswerService.answer(
@@ -118,12 +152,17 @@ class DocumentSearchCapabilityProvider(
             contentSnippet = snippet,
             sourceFileName = sourceFileName,
             sourceModifiedAt = sourceModifiedAt,
+            answerMode = answerMode,
         )
-        return encoded + mapOf(
-            "contentSnippet" to snippet,
-            "answer" to answer,
-            "userMessage" to answer,
-        )
+        return encoded + buildMap {
+            put("contentSnippet", snippet)
+            put("answer", answer)
+            put("userMessage", answer)
+            put("answerMode", answerMode)
+            sourceFileName?.let { put("sourceFileName", it) }
+            sourceModifiedAt?.let { put("sourceModifiedAt", it.toString()) }
+            if (isExtract) put("displayMode", displayMode)
+        }
     }
 
     /**

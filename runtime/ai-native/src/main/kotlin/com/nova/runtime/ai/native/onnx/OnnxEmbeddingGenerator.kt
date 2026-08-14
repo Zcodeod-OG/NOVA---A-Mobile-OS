@@ -106,5 +106,10 @@ class OnnxEmbeddingGenerator(
         }
     }
 
+    suspend fun preWarm() {
+        sessionManager.ensureLoaded()
+        embed("nova warmup")
+    }
+
     fun close() = sessionManager.close()
 }

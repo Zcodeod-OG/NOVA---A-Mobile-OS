@@ -109,7 +109,29 @@ class DefaultNirGenerator : NirGenerator {
                     constraints["startTime"] = event.startTime.toString()
                     constraints["endTime"] = event.endTime.toString()
                 }
+            "read_calendar" -> {
+                parseCalendarReadWindow(payload)?.let { (start, end) ->
+                    constraints["startTime"] = start.toString()
+                    constraints["endTime"] = end.toString()
+                }
+                constraints["intentType"] = intentType
+            }
+            "schedule_from_message" ->
+                constraints["intentType"] = intentType
         }
+    }
+
+    private fun parseCalendarReadWindow(payload: String): Pair<Long, Long>? {
+        val zone = java.time.ZoneId.systemDefault()
+        val lower = payload.lowercase()
+        val day = when {
+            "tomorrow" in lower -> java.time.LocalDate.now(zone).plusDays(1)
+            "today" in lower || "tonight" in lower -> java.time.LocalDate.now(zone)
+            else -> java.time.LocalDate.now(zone)
+        }
+        val start = day.atStartOfDay(zone).toInstant().toEpochMilli()
+        val end = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1
+        return start to end
     }
 
     private fun enrichCompoundFlowConstraints(
@@ -134,7 +156,44 @@ class DefaultNirGenerator : NirGenerator {
                     enrichDocumentQuestionConstraints(payload, constraints)
                 }
             }
+            "extract_document_content" -> {
+                extractDocumentExtractQuery(payload)?.let { query ->
+                    constraints["documentQuery"] = query
+                    constraints["query"] = query
+                }
+                enrichDocumentQuestionConstraints(payload, constraints)
+                constraints["answerMode"] = "extract"
+                constraints["maxDisplayChars"] = DEFAULT_EXTRACT_DISPLAY_CHARS.toString()
+                constraints["displayMode"] = resolveExtractDisplayMode(payload, constraints)
+                constraints["intentType"] = intentType
+            }
         }
+    }
+
+    private fun resolveExtractDisplayMode(
+        payload: String,
+        constraints: Map<String, String>,
+    ): String {
+        val lower = payload.lowercase()
+        if (VERBATIM_EXTRACT_REGEX.containsMatchIn(lower)) return DISPLAY_MODE_VERBATIM
+        if (
+            constraints.containsKey("dateScope") ||
+            constraints.containsKey("topic") ||
+            constraints.containsKey("timeRangeStart") ||
+            DocumentQuestionTime.detectTopic(lower) != null ||
+            DocumentQuestionTime.extractFromSubject(lower) != null
+        ) {
+            return DISPLAY_MODE_SCOPED
+        }
+        return DISPLAY_MODE_VERBATIM
+    }
+
+    private fun extractDocumentExtractQuery(payload: String): String? {
+        val lower = payload.lowercase().trim()
+        EXTRACT_SUBJECT_REGEX.find(lower)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotBlank() }?.let {
+            return it
+        }
+        return extractDocumentQuestionQuery(lower)
     }
 
     /**
@@ -341,12 +400,20 @@ class DefaultNirGenerator : NirGenerator {
     private fun requiredCapabilitiesFor(intentType: String, resolvedType: String?): List<String> {
         when (intentType) {
             "send_document_whatsapp" -> return listOf("search.documents", "whatsapp")
-            "document_question" -> return listOf("search.documents")
+            "document_question", "extract_document_content" -> return listOf("search.documents")
             // Negated commands execute nothing; "none" keeps the NIR valid for the
             // orchestrator's early exit.
             "negated_command" -> return listOf("none")
+            "review_important" -> return listOf("none")
+            "read_calendar" -> return listOf("calendar.read")
+            "schedule_from_message" -> return listOf("calendar.read", "calendar")
         }
-        resolvedType?.let { return listOf(it) }
+        resolvedType?.let {
+            return when (intentType) {
+                "read_calendar" -> listOf("calendar.read")
+                else -> listOf(it)
+            }
+        }
         return when (intentType) {
             "set_reminder", "set_alarm" -> listOf("alarm")
             "send_message", "send_whatsapp_message" -> listOf("whatsapp")
@@ -354,6 +421,9 @@ class DefaultNirGenerator : NirGenerator {
             "search_documents" -> listOf("search.documents")
             "search", "semantic_search" -> listOf("search.semantic")
             "manage_calendar", "create_calendar_event" -> listOf("calendar")
+            "read_calendar" -> listOf("calendar.read")
+            "schedule_from_message" -> listOf("calendar.read", "calendar")
+            "review_important" -> listOf("none")
             "lookup_contact" -> listOf("contacts")
             "share_file" -> listOf("share")
             "open_application" -> listOf("device")
@@ -409,6 +479,9 @@ class DefaultNirGenerator : NirGenerator {
     companion object {
         const val NIR_VERSION = 1
         private const val FALLBACK_ENTITY_CONFIDENCE = 0.5
+        private const val DEFAULT_EXTRACT_DISPLAY_CHARS = 4_000
+        const val DISPLAY_MODE_SCOPED = "scoped"
+        const val DISPLAY_MODE_VERBATIM = "verbatim"
         // Captures one to four name tokens before "on whatsapp" / "saying" / end.
         private val RECIPIENT_REGEX = Regex(
             """(?:to|for)\s+([a-z][a-z0-9]+(?:\s+[a-z][a-z0-9]+){0,3}?)(?:\s+(?:saying|about|at|from|on\s+whatsapp)|$)""",
@@ -448,6 +521,14 @@ class DefaultNirGenerator : NirGenerator {
             "find", "search", "send", "share", "the", "document", "documents", "doc", "docs",
             "pdf", "file", "whatsapp", "whats", "app", "via", "through",
             "on", "to", "for",
+        )
+        private val VERBATIM_EXTRACT_REGEX = Regex(
+            """\b(?:full|entire|whole|all)\s+(?:text|content|file|document)\b""",
+            RegexOption.IGNORE_CASE,
+        )
+        private val EXTRACT_SUBJECT_REGEX = Regex(
+            """\b(?:extract\s+(?:content|text)|show\s+me\s+the\s+text\s+in|display\s+contents?\s+of|read\s+out\s+(?:the\s+)?file)\s+(?:from\s+|in\s+|of\s+)?(.+)$""",
+            RegexOption.IGNORE_CASE,
         )
     }
 }

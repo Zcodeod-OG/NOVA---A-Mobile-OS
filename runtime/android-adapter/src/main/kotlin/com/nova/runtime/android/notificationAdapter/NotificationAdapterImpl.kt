@@ -4,12 +4,14 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.nova.runtime.android.internal.AdapterBoundary
 import com.nova.runtime.android.internal.AdapterErrorMapper
 import com.nova.runtime.android.internal.PermissionChecker
 import com.nova.runtime.models.contracts.CapabilityResult
+import com.nova.runtime.storage.repository.MessageRepository
 import com.nova.runtime.utils.logging.NovaLogger
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +20,7 @@ import kotlinx.coroutines.withContext
 class NotificationAdapterImpl(
     private val context: Context,
     private val logger: NovaLogger,
+    private val messageRepository: MessageRepository? = null,
 ) : NotificationAdapter {
     override fun supportedOperations(): Set<String> =
         setOf(
@@ -85,12 +88,31 @@ class NotificationAdapterImpl(
         return mapOf("notificationId" to notificationId.toString(), "status" to "dismissed")
     }
 
-    private fun read(parameters: Map<String, String>): Map<String, String> {
+    private suspend fun read(parameters: Map<String, String>): Map<String, String> {
         if (!NotificationListenerState.isEnabled(context)) {
             throw SecurityException("Notification listener not enabled")
         }
         val active = NotificationListenerState.snapshot()
-        return mapOf("count" to active.size.toString(), "notifications" to active.joinToString("|"))
+        val output = mutableMapOf(
+            "count" to active.size.toString(),
+            "notifications" to active.joinToString("|"),
+        )
+        val channel = parameters["channel"]
+        if (messageRepository != null && !channel.isNullOrBlank()) {
+            val limit = parameters["limit"]?.toIntOrNull()?.coerceIn(1, 100) ?: 25
+            val messages = messageRepository.search(channel, parameters["query"].orEmpty(), limit)
+            output["messageCount"] = messages.size.toString()
+            output["messages"] =
+                messages.joinToString("|") { msg ->
+                    listOf(
+                        msg.id,
+                        msg.sender,
+                        msg.body.replace("|", " "),
+                        msg.receivedAt,
+                    ).joinToString(":")
+                }
+        }
+        return output
     }
 
     private fun ensureChannel(channelId: String, channelName: String) {
@@ -121,7 +143,15 @@ class NotificationAdapterImpl(
 object NotificationListenerState {
     private val activeNotifications = mutableListOf<String>()
 
-    fun isEnabled(context: Context): Boolean = NovaNotificationListenerService.isConnected()
+    fun isEnabled(context: Context): Boolean {
+        if (NovaNotificationListenerService.isConnected()) return true
+        val enabled =
+            Settings.Secure.getString(
+                context.contentResolver,
+                "enabled_notification_listeners",
+            ).orEmpty()
+        return enabled.contains(context.packageName)
+    }
 
     fun updateSnapshot(entries: List<String>) {
         synchronized(activeNotifications) {

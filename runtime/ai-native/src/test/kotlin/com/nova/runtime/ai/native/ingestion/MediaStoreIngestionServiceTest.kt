@@ -225,6 +225,7 @@ class MediaStoreIngestionServiceTest {
         override suspend fun delete(embeddingId: UUID) = Unit
         override suspend fun getById(embeddingId: UUID) = null
         override fun observeById(embeddingId: UUID): Flow<com.nova.runtime.storage.entities.EmbeddingEntity?> = emptyFlow()
+        override suspend fun listWithPersistedVectors(): List<com.nova.runtime.storage.entities.EmbeddingEntity> = emptyList()
     }
 
     private class FakePhotoDao(

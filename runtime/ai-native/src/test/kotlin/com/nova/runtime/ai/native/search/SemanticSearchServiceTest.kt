@@ -9,6 +9,9 @@ import com.nova.runtime.ai.model.OcrEngine
 import com.nova.runtime.ai.model.OcrResult
 import com.nova.runtime.ai.native.indexing.EmbeddingIndexer
 import com.nova.runtime.ai.native.indexing.EmbeddingMetadata
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.nova.runtime.ai.native.ingestion.IndexingCheckpointStore
 import com.nova.runtime.ai.native.ingestion.MediaStoreIngestionService
 import com.nova.runtime.ai.native.ingestion.PhotoImageLoader
 import com.nova.runtime.ai.native.storage.CosineVectorIndex
@@ -25,6 +28,7 @@ import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -42,10 +46,14 @@ class SemanticSearchServiceTest {
     private lateinit var photoRepository: FakePhotoRepository
     private lateinit var documentRepository: FakeDocumentRepository
     private lateinit var embeddingRepository: FakeEmbeddingRepository
+    private lateinit var pipeline: SearchIndexPipeline
+    private lateinit var ingestionService: MediaStoreIngestionService
     private lateinit var service: SemanticSearchService
+    private lateinit var context: Context
 
     @Before
     fun setUp() {
+        context = ApplicationProvider.getApplicationContext()
         vectorIndex = CosineVectorIndex()
         embeddingGenerator = HashEmbeddingGenerator(dimension = 32)
         imageEmbeddingGenerator = HashImageEmbeddingGenerator(dimension = 32)
@@ -59,7 +67,7 @@ class SemanticSearchServiceTest {
             vectorIndex = vectorIndex,
             ocrEngine = StubOcrEngine(),
         )
-        val pipeline = SearchIndexPipeline(
+        pipeline = SearchIndexPipeline(
             embeddingIndexer = indexer,
             photoDao = FakePhotoDao(photoRepository),
             documentDao = FakeDocumentDao(documentRepository),
@@ -67,7 +75,7 @@ class SemanticSearchServiceTest {
             documentRepository = documentRepository,
             photoImageLoader = PhotoImageLoader { null },
         )
-        val ingestionService = MediaStoreIngestionService(
+        ingestionService = MediaStoreIngestionService(
             mediaStoreQuery = com.nova.runtime.storage.search.NoOpMediaStoreQueryPort(),
             downloadsQuery = com.nova.runtime.storage.search.NoOpDownloadsQueryPort(),
             documentsQuery = com.nova.runtime.storage.search.NoOpDocumentsQueryPort(),
@@ -93,6 +101,80 @@ class SemanticSearchServiceTest {
             logger = NoOpRuntimeLogger(),
         )
     }
+
+    @Test
+    fun shouldRunIndexCatchUp_falseWithoutCheckpointWhenIndexWarm() = runTest {
+        indexText(UUID.randomUUID(), "document", "warm index")
+
+        assertFalse(
+            service.shouldRunIndexCatchUp(
+                SearchRequest(query = "invoice", limit = 5, indexOnQuery = false),
+            ),
+        )
+    }
+
+    @Test
+    fun shouldRunIndexCatchUp_falseWhenIndexWarmAndRecentlySynced() = runTest {
+        indexText(UUID.randomUUID(), "document", "warm index")
+        val checkpointStore = IndexingCheckpointStore(context)
+        checkpointStore.markPrioritySyncAt()
+        val serviceWithCheckpoint = SemanticSearchService(
+            embeddingGenerator = embeddingGenerator,
+            imageEmbeddingGenerator = imageEmbeddingGenerator,
+            vectorIndex = vectorIndex,
+            photoRepository = photoRepository,
+            documentRepository = documentRepository,
+            documentDao = FakeDocumentDao(documentRepository),
+            searchIndexPipeline = pipeline,
+            mediaStoreIngestionService = ingestionService,
+            fullDeviceIndexer = null,
+            indexingCheckpointStore = checkpointStore,
+            logger = NoOpRuntimeLogger(),
+        )
+
+        assertFalse(
+            serviceWithCheckpoint.shouldRunIndexCatchUp(
+                SearchRequest(query = "invoice", limit = 5, indexOnQuery = false),
+            ),
+        )
+    }
+
+    @Test
+    fun search_reusesCachedTextEmbeddingForDocAndPhotoPaths() =
+        runTest {
+            var embedCalls = 0
+            val countingGenerator = object : EmbeddingGenerator by HashEmbeddingGenerator(dimension = 32) {
+                override suspend fun embed(text: String): EmbeddingResult {
+                    embedCalls++
+                    return HashEmbeddingGenerator(dimension = 32).embed(text)
+                }
+            }
+            val countingService = SemanticSearchService(
+                embeddingGenerator = countingGenerator,
+                imageEmbeddingGenerator = imageEmbeddingGenerator,
+                vectorIndex = vectorIndex,
+                photoRepository = photoRepository,
+                documentRepository = documentRepository,
+                documentDao = FakeDocumentDao(documentRepository),
+                searchIndexPipeline = pipeline,
+                mediaStoreIngestionService = ingestionService,
+                fullDeviceIndexer = null,
+                logger = NoOpRuntimeLogger(),
+            )
+            val docId = UUID.randomUUID()
+            val photoId = UUID.randomUUID()
+            documentRepository.records[docId] = sampleDocument(docId, "Invoice", "/docs/invoice.pdf")
+            photoRepository.records[photoId] = samplePhoto(photoId, "beach sunset photo", "content://photo/beach")
+            indexText(docId, "document", "invoice financial report")
+            indexText(photoId, "photo", "beach sunset vacation", EmbeddingMetadata.KIND_OCR)
+
+            countingService.search(
+                request = SearchRequest(query = "invoice beach", limit = 5, indexOnQuery = false),
+                traceId = UUID.randomUUID(),
+            )
+
+            assertEquals(1, embedCalls)
+        }
 
     @Test
     fun search_returnsRankedSemanticHits() =
@@ -287,6 +369,7 @@ class SemanticSearchServiceTest {
         override suspend fun delete(embeddingId: UUID) = Unit
         override suspend fun getById(embeddingId: UUID) = null
         override fun observeById(embeddingId: UUID): Flow<com.nova.runtime.storage.entities.EmbeddingEntity?> = emptyFlow()
+        override suspend fun listWithPersistedVectors(): List<com.nova.runtime.storage.entities.EmbeddingEntity> = emptyList()
     }
 
     private class FakePhotoDao(

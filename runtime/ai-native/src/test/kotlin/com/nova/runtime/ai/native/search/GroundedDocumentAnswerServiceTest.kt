@@ -1,12 +1,55 @@
 package com.nova.runtime.ai.native.search
 
 import com.nova.runtime.ai.model.LocalLlmEngine
+import java.time.LocalDate
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GroundedDocumentAnswerServiceTest {
+
+    @Test
+    fun extractMode_returnsVerbatimSnippetWithAttribution() = runTest {
+        val snippet = """
+            FRIDAY
+            Dinner: Veg Biryani, Raita
+            """.trimIndent()
+        val service = GroundedDocumentAnswerService()
+        val answer = service.answer(
+            query = "extract content from mess menu",
+            contentSnippet = snippet,
+            sourceFileName = "mess_menu.pdf",
+            sourceModifiedAt = 1L,
+            answerMode = GroundedDocumentAnswerService.ANSWER_MODE_EXTRACT,
+        )
+        assertTrue(answer.contains("Veg Biryani"))
+        assertTrue(answer.contains("— from mess_menu.pdf"))
+        assertFalse(answer.startsWith("Today's Dinner"))
+    }
+
+    @Test
+    fun simpleMenuQuery_skipsLlmEvenWhenAvailable() = runTest {
+        val snippet = """
+            Dinner
+            Paneer butter masala
+            Rice
+            Dal
+            """.trimIndent()
+        val llm = object : LocalLlmEngine {
+            override fun isAvailable(): Boolean = true
+            override suspend fun generate(prompt: String, maxTokens: Int): String =
+                error("LLM should not be invoked for simple menu queries")
+        }
+        val service = GroundedDocumentAnswerService(llm)
+        val answer = service.answer(
+            query = "what is todays dinner menu",
+            contentSnippet = snippet,
+            sourceFileName = "mess_menu.pdf",
+            sourceModifiedAt = 1L,
+        )
+        assertTrue(answer.contains("Paneer") || answer.contains("Dinner") || answer.contains("mess_menu"))
+    }
 
     @Test
     fun blankSnippet_refusesWithoutFabricatingSchedule() = runTest {
@@ -43,10 +86,12 @@ class GroundedDocumentAnswerServiceTest {
 
     @Test
     fun scheduleFallback_neverLabelsAsTodaysLectures() = runTest {
+        // Snippet has Wed/Thu only — "today's lectures" must not claim Today's slots when
+        // today's weekday section is absent (deterministic regardless of run day).
         val snippet = """
-            MONDAY
+            WEDNESDAY
             9:30-11:00 MLL1001 Lecture LH 325
-            TUESDAY
+            THURSDAY
             8:00-9:00 MEL2001 Lecture LH 308
             """.trimIndent()
         val service = GroundedDocumentAnswerService()
@@ -55,6 +100,7 @@ class GroundedDocumentAnswerServiceTest {
             contentSnippet = snippet,
             sourceFileName = "timetable_ocr.png",
             sourceModifiedAt = 1L,
+            referenceDate = LocalDate.of(2026, 8, 11), // Monday — snippet has Wed/Thu only
         )
         assertFalse(answer.startsWith("Today's lecture slots"))
         assertTrue(answer.contains("MLL1001") || answer.contains("Schedule excerpt"))

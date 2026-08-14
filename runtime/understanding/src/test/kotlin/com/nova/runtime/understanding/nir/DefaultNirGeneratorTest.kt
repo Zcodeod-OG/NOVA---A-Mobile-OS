@@ -195,6 +195,46 @@ class DefaultNirGeneratorTest {
     }
 
     @Test
+    fun generate_extractDocumentContent_setsExtractModeAndScopedDisplay() = runTest {
+        val nir = generator.generate(
+            normalizedObservation("extract content from todays mess menu"),
+            DetectedIntent(
+                goal = "extract_document_content",
+                intentType = "extract_document_content",
+                confidence = 0.85,
+            ),
+            emptyList(),
+            emptyMap(),
+            deterministicRoute(),
+        )
+
+        assertEquals("todays mess menu", nir.constraints["documentQuery"])
+        assertEquals("extract", nir.constraints["answerMode"])
+        assertEquals("4000", nir.constraints["maxDisplayChars"])
+        assertEquals(DefaultNirGenerator.DISPLAY_MODE_SCOPED, nir.constraints["displayMode"])
+        assertEquals("today", nir.constraints["dateScope"])
+        assertEquals(listOf("search.documents"), nir.requiredCapabilities)
+    }
+
+    @Test
+    fun generate_extractDocumentContent_verbatimWhenNoScope() = runTest {
+        val nir = generator.generate(
+            normalizedObservation("extract content from bookly prospectus report"),
+            DetectedIntent(
+                goal = "extract_document_content",
+                intentType = "extract_document_content",
+                confidence = 0.85,
+            ),
+            emptyList(),
+            emptyMap(),
+            deterministicRoute(),
+        )
+
+        assertEquals("bookly prospectus report", nir.constraints["documentQuery"])
+        assertEquals(DefaultNirGenerator.DISPLAY_MODE_VERBATIM, nir.constraints["displayMode"])
+    }
+
+    @Test
     fun generate_documentQuestion_extractsDinnerMenuQuery() = runTest {
         val nir = generator.generate(
             normalizedObservation("what is todays dinner menu"),

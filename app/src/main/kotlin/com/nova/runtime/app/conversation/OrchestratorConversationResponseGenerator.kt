@@ -16,6 +16,7 @@ class OrchestratorConversationResponseGenerator(
         )
         return when (result) {
             is PipelineResult.Success -> result.summary
+            is PipelineResult.PendingConfirmation -> result.confirmationPrompt
             is PipelineResult.Failure -> "Unable to complete: ${result.summary}"
         }
     }

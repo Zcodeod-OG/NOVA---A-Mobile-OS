@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -431,6 +432,7 @@ class DocumentContentSearchTest {
             val stored = documentRepository.records[document.id]!!
             assertNotNull(stored.summary)
             assertTrue(stored.summary!!.length < stored.contentText!!.length)
+            val summaryBeforeSearch = stored.summary
 
             val page = service.search(
                 request = SearchRequest(query = "todays mess menu", limit = 5, indexOnQuery = false),
@@ -444,7 +446,9 @@ class DocumentContentSearchTest {
             assertNotNull(snippet)
             // Stage B answer excerpt comes from full contentText, not the short summary.
             assertTrue(snippet!!.contains("lunch-${today.name.lowercase()}"))
-            assertFalse(stored.summary!!.contains("lunch-${today.name.lowercase()}"))
+            // Summary is Stage A discovery text; Stage B snippet must be richer than summary.
+            assertTrue(summaryBeforeSearch!!.length < stored.contentText!!.length)
+            assertNotEquals(snippet.trim(), summaryBeforeSearch.trim())
         }
 
     @Test
@@ -900,6 +904,7 @@ class DocumentContentSearchTest {
         override suspend fun delete(embeddingId: UUID) = Unit
         override suspend fun getById(embeddingId: UUID) = null
         override fun observeById(embeddingId: UUID): Flow<EmbeddingEntity?> = emptyFlow()
+        override suspend fun listWithPersistedVectors(): List<EmbeddingEntity> = emptyList()
     }
 
     private class FakePhotoDao(

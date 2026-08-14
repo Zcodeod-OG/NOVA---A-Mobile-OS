@@ -29,6 +29,8 @@ object CapabilityOperationAliases {
                 androidKeys += LookupKey("time", NovaCapabilityOperations.ALARM_CREATE)
             NovaCapabilityOperations.CALENDAR_CREATE ->
                 androidKeys += LookupKey("time", NovaCapabilityOperations.CALENDAR_CREATE)
+            NovaCapabilityOperations.CALENDAR_READ ->
+                androidKeys += LookupKey("time", NovaCapabilityOperations.CALENDAR_READ)
             NovaCapabilityOperations.SHARE_FILE ->
                 androidKeys += LookupKey("media", NovaCapabilityOperations.SHARE_FILE)
             NovaCapabilityOperations.SEARCH_PHOTOS ->
@@ -41,6 +43,10 @@ object CapabilityOperationAliases {
                 androidKeys += LookupKey("device", NovaCapabilityOperations.DEVICE_OPEN_APP)
             NovaCapabilityOperations.DEVICE_APP_SEARCH ->
                 androidKeys += LookupKey("device", NovaCapabilityOperations.DEVICE_APP_SEARCH)
+            NovaCapabilityOperations.EMAIL_READ ->
+                androidKeys += LookupKey("email", NovaCapabilityOperations.EMAIL_READ)
+            NovaCapabilityOperations.EMAIL_SEARCH ->
+                androidKeys += LookupKey("email", NovaCapabilityOperations.EMAIL_SEARCH)
         }
 
         if (operation.contains('.')) {

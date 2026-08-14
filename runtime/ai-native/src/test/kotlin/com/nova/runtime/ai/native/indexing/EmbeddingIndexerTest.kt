@@ -26,6 +26,19 @@ class EmbeddingIndexerTest {
     private val embeddingRepository = FakeEmbeddingRepository()
 
     @Test
+    fun indexText_persistsVectorBlob() = runTest {
+        val indexer = createIndexer(NoOcrEngine())
+        val objectId = UUID.randomUUID()
+
+        val embeddingId = indexer.indexText(objectId, "document", "invoice total due")
+
+        assertNotNull(embeddingId)
+        val stored = embeddingRepository.lastInserted
+        assertNotNull(stored?.vectorBlob)
+        assertEquals(1, vectorIndex.size())
+    }
+
+    @Test
     fun indexPhoto_withoutOcr_stillIndexesImageEmbedding() =
         runTest {
             val indexer = createIndexer(NoOcrEngine())
@@ -75,10 +88,16 @@ class EmbeddingIndexerTest {
     }
 
     private class FakeEmbeddingRepository : EmbeddingRepository {
-        override suspend fun insert(embedding: com.nova.runtime.storage.entities.EmbeddingEntity) = Unit
+        var lastInserted: com.nova.runtime.storage.entities.EmbeddingEntity? = null
+
+        override suspend fun insert(embedding: com.nova.runtime.storage.entities.EmbeddingEntity) {
+            lastInserted = embedding
+        }
         override suspend fun update(embedding: com.nova.runtime.storage.entities.EmbeddingEntity) = Unit
         override suspend fun delete(embeddingId: UUID) = Unit
         override suspend fun getById(embeddingId: UUID) = null
         override fun observeById(embeddingId: UUID): Flow<com.nova.runtime.storage.entities.EmbeddingEntity?> = emptyFlow()
+        override suspend fun listWithPersistedVectors(): List<com.nova.runtime.storage.entities.EmbeddingEntity> =
+            listOfNotNull(lastInserted).filter { it.vectorBlob != null }
     }
 }

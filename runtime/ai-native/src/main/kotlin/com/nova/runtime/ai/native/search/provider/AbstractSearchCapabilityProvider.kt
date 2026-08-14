@@ -72,7 +72,10 @@ abstract class AbstractSearchCapabilityProvider(
             query = parameters.getValue("query"),
             limit = parameters["limit"]?.toIntOrNull() ?: SearchRequest.DEFAULT_LIMIT,
             offset = parameters["offset"]?.toIntOrNull() ?: 0,
-            indexOnQuery = parameters["indexOnQuery"]?.toBooleanStrictOrNull() ?: true,
+            indexOnQuery = parameters["indexOnQuery"]?.toBooleanStrictOrNull() ?: false,
+            answerMode = parameters["answerMode"],
+            maxDisplayChars = parameters["maxDisplayChars"]?.toIntOrNull(),
+            displayMode = parameters["displayMode"],
         )
 
     private fun invalidOperation(operation: String): CapabilityValidationResult.Invalid =

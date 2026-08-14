@@ -36,6 +36,7 @@ dependencies {
     implementation(libs.room.ktx)
     implementation(libs.koin.core)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(project(":runtime:understanding"))
     ksp(libs.room.compiler)
 
     testImplementation(libs.junit)

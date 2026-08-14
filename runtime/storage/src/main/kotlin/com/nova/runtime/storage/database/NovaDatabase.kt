@@ -8,6 +8,7 @@ import com.nova.runtime.storage.dao.ContactDao
 import com.nova.runtime.storage.dao.DocumentDao
 import com.nova.runtime.storage.dao.EmbeddingDao
 import com.nova.runtime.storage.dao.ExecutionHistoryDao
+import com.nova.runtime.storage.dao.MessageDao
 import com.nova.runtime.storage.dao.PhotoDao
 import com.nova.runtime.storage.dao.PreferenceDao
 import com.nova.runtime.storage.dao.ProjectDao
@@ -16,6 +17,7 @@ import com.nova.runtime.storage.entities.ContactEntity
 import com.nova.runtime.storage.entities.DocumentEntity
 import com.nova.runtime.storage.entities.EmbeddingEntity
 import com.nova.runtime.storage.entities.ExecutionHistoryEntity
+import com.nova.runtime.storage.entities.MessageEntity
 import com.nova.runtime.storage.entities.PhotoEntity
 import com.nova.runtime.storage.entities.PreferenceEntity
 import com.nova.runtime.storage.entities.ProjectEntity
@@ -33,6 +35,7 @@ import com.nova.runtime.storage.migrations.StorageMigrations
         SessionEntity::class,
         PreferenceEntity::class,
         ExecutionHistoryEntity::class,
+        MessageEntity::class,
     ],
     version = StorageMigrations.CURRENT_VERSION,
     exportSchema = true,
@@ -54,4 +57,6 @@ abstract class NovaDatabase : RoomDatabase() {
     abstract fun executionHistoryDao(): ExecutionHistoryDao
 
     abstract fun embeddingDao(): EmbeddingDao
+
+    abstract fun messageDao(): MessageDao
 }

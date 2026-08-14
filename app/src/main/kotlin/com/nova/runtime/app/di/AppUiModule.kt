@@ -9,6 +9,7 @@ import com.nova.runtime.kernel.config.KernelConfigKeys
 import com.nova.runtime.utils.logging.LogLevel
 import com.nova.runtime.utils.logging.NovaLogger
 import com.nova.runtime.utils.logging.StructuredLogger
+import com.nova.runtime.app.ui.onboarding.ProfileOnboardingViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
@@ -38,4 +39,5 @@ val appUiModule = module {
     }
     single<ConversationResponseGenerator> { OrchestratorConversationResponseGenerator(get()) }
     viewModel { NovaOsViewModel(get(), get(), get(), get(), get(), get()) }
+    viewModel { ProfileOnboardingViewModel(get()) }
 }

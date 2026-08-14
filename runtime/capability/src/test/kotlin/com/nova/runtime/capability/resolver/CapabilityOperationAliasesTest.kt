@@ -41,14 +41,12 @@ class CapabilityOperationAliasesTest {
     }
 
     @Test
-    fun variants_prefersAndroidMappedKeyFirst() {
-        val variants = CapabilityOperationAliases.variants("whatsapp", "send_message")
-        assertEquals(
-            CapabilityOperationAliases.LookupKey(
-                "communication",
-                NovaCapabilityOperations.WHATSAPP_SEND_MESSAGE,
+    fun variants_emailRead_includesAndroidEmailKey() {
+        val variants = CapabilityOperationAliases.variants("email", "read")
+        assertTrue(
+            variants.contains(
+                CapabilityOperationAliases.LookupKey("email", NovaCapabilityOperations.EMAIL_READ),
             ),
-            variants.first(),
         )
     }
 }

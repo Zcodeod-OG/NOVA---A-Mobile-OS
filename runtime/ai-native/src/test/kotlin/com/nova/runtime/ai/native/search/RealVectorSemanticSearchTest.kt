@@ -279,6 +279,7 @@ class RealVectorSemanticSearchTest {
         override suspend fun delete(embeddingId: UUID) = Unit
         override suspend fun getById(embeddingId: UUID) = null
         override fun observeById(embeddingId: UUID): Flow<EmbeddingEntity?> = emptyFlow()
+        override suspend fun listWithPersistedVectors(): List<EmbeddingEntity> = emptyList()
     }
 
     private class FakePhotoDao(

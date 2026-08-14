@@ -31,4 +31,14 @@ sealed class PipelineResult {
         val error: RuntimeError,
         val summary: String,
     ) : PipelineResult()
+
+    /** Calendar create (or similar) blocked until the user confirms in UI. */
+    data class PendingConfirmation(
+        override val traceId: UUID,
+        val nir: Nir,
+        val graph: Nag,
+        val capabilityOperation: String,
+        val summary: String,
+        val confirmationPrompt: String,
+    ) : PipelineResult()
 }

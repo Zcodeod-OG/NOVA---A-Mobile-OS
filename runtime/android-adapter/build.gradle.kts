@@ -32,6 +32,8 @@ dependencies {
     implementation(project(":runtime:utils"))
     implementation(libs.koin.android)
     implementation(libs.kotlinx.coroutines.android)
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(project(":runtime:events"))

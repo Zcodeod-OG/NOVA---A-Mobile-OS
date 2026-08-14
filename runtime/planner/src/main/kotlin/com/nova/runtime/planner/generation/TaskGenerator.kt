@@ -113,6 +113,14 @@ class DefaultTaskGenerator : TaskGenerator {
                     ?: nir.constraints["query"]
                     ?: nir.context["rawPayload"].orEmpty()
                 put("query", query)
+                nir.constraints["answerMode"]?.let { put("answerMode", it) }
+                nir.constraints["maxDisplayChars"]?.let { put("maxDisplayChars", it) }
+                nir.constraints["displayMode"]?.let { put("displayMode", it) }
+                nir.constraints["dateScope"]?.let { put("dateScope", it) }
+                nir.constraints["topic"]?.let { put("topic", it) }
+                nir.constraints["timeRangeStart"]?.let { put("timeRangeStart", it) }
+                nir.constraints["timeRangeEnd"]?.let { put("timeRangeEnd", it) }
+                nir.constraints["documentSubject"]?.let { put("documentSubject", it) }
             }
             capability == "whatsapp" || capability.startsWith("whatsapp") -> {
                 put("capabilityType", "whatsapp")
@@ -131,14 +139,23 @@ class DefaultTaskGenerator : TaskGenerator {
                 }
             }
             capability == "alarm" || nir.constraints["capabilityOperation"] == NovaCapabilityOperations.ALARM_CREATE -> {
-                put("capabilityType", "alarm")
-                put("operation", "create")
+                put("capabilityType", "time")
+                put("operation", NovaCapabilityOperations.ALARM_CREATE)
                 put("capabilityOperation", NovaCapabilityOperations.ALARM_CREATE)
             }
+            capability == "calendar.read" ||
+                nir.constraints["capabilityOperation"] == NovaCapabilityOperations.CALENDAR_READ -> {
+                put("capabilityType", "time")
+                put("operation", NovaCapabilityOperations.CALENDAR_READ)
+                put("capabilityOperation", NovaCapabilityOperations.CALENDAR_READ)
+            }
             capability == "calendar" || nir.constraints["capabilityOperation"] == NovaCapabilityOperations.CALENDAR_CREATE -> {
-                put("capabilityType", "calendar")
-                put("operation", "create")
+                put("capabilityType", "time")
+                put("operation", NovaCapabilityOperations.CALENDAR_CREATE)
                 put("capabilityOperation", NovaCapabilityOperations.CALENDAR_CREATE)
+                if (nir.goal == "schedule_from_message" || nir.constraints["requiresConfirmation"] == "true") {
+                    put("requiresConfirmation", "true")
+                }
             }
             capability == "device" ||
                 nir.constraints["capabilityOperation"] == NovaCapabilityOperations.DEVICE_OPEN_APP ||

@@ -3,6 +3,7 @@ package com.nova.runtime.ai.native.search.di
 import com.nova.runtime.ai.model.DocumentTextExtractor
 import com.nova.runtime.ai.model.LocalLlmEngine
 import com.nova.runtime.ai.native.indexing.EmbeddingIndexer
+import com.nova.runtime.ai.native.indexing.VectorIndexHydrator
 import com.nova.runtime.ai.native.ingestion.FullDeviceIndexer
 import com.nova.runtime.ai.native.ingestion.IndexingCheckpointStore
 import com.nova.runtime.ai.native.ingestion.MediaStoreIngestionService
@@ -69,6 +70,8 @@ val searchModule = module {
         )
     }
 
+    single { VectorIndexHydrator(embeddingRepository = get(), vectorIndex = get(), logger = get()) }
+
     single {
         SemanticSearchService(
             embeddingGenerator = get(),
@@ -80,6 +83,7 @@ val searchModule = module {
             searchIndexPipeline = get(),
             mediaStoreIngestionService = get(),
             fullDeviceIndexer = get(),
+            indexingCheckpointStore = get(),
             logger = get(),
         )
     }

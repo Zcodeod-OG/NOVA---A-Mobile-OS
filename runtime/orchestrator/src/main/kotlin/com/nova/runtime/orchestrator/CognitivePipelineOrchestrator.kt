@@ -12,6 +12,7 @@ import com.nova.runtime.models.contracts.MemoryQuery
 import com.nova.runtime.models.contracts.MemoryResult
 import com.nova.runtime.models.contracts.PlanningRequest
 import com.nova.runtime.models.contracts.PlanningResult
+import com.nova.runtime.orchestrator.calendar.CalendarIntentSupport
 import com.nova.runtime.models.contracts.PolicyDecisionType
 import com.nova.runtime.models.contracts.PolicyEvaluationResult
 import com.nova.runtime.models.contracts.PolicyRequest
@@ -38,6 +39,7 @@ class CognitivePipelineOrchestrator(
     private val policyEngine: PolicyEngine,
     private val executionRuntime: ExecutionRuntime,
     private val memoryPlatform: MemoryPlatform,
+    private val calendarIntentSupport: CalendarIntentSupport,
     private val logger: NovaLogger,
 ) {
     suspend fun processUserCommand(text: String, traceId: String): PipelineResult {
@@ -72,19 +74,8 @@ class CognitivePipelineOrchestrator(
                 summary = "Could not understand the command.",
             )
 
-        val capabilityOperation = nir.constraints["capabilityOperation"]
-            ?: NovaCapabilityOperations.forIntent(nir.goal)
-            ?: "unknown"
-
-        // Negated commands ("do not open youtube") acknowledge without executing anything.
-        if (nir.goal == NEGATED_COMMAND_GOAL || nir.constraints["negated"] == "true") {
-            val negatedAction = nir.constraints["negatedAction"]
-            val summary = if (negatedAction.isNullOrBlank()) {
-                "Okay — I won't do that. Nothing was executed."
-            } else {
-                "Okay — I won't $negatedAction. Nothing was executed."
-            }
-            logger.info(RuntimeModule.KERNEL.name, summary, traceUuid)
+        if (nir.goal == "review_important") {
+            val summary = calendarIntentSupport.buildImportantSummary()
             return PipelineResult.Success(
                 traceId = traceUuid,
                 nir = nir,
@@ -95,10 +86,39 @@ class CognitivePipelineOrchestrator(
             )
         }
 
-        val memoryResults = resolveMemory(nir, traceUuid)
+        val enrichedNir = if (nir.goal == "schedule_from_message") {
+            calendarIntentSupport.enrichScheduleNir(nir)
+        } else {
+            nir
+        }
+
+        val capabilityOperation = enrichedNir.constraints["capabilityOperation"]
+            ?: NovaCapabilityOperations.forIntent(enrichedNir.goal)
+            ?: "unknown"
+
+        // Negated commands ("do not open youtube") acknowledge without executing anything.
+        if (enrichedNir.goal == NEGATED_COMMAND_GOAL || enrichedNir.constraints["negated"] == "true") {
+            val negatedAction = enrichedNir.constraints["negatedAction"]
+            val summary = if (negatedAction.isNullOrBlank()) {
+                "Okay — I won't do that. Nothing was executed."
+            } else {
+                "Okay — I won't $negatedAction. Nothing was executed."
+            }
+            logger.info(RuntimeModule.KERNEL.name, summary, traceUuid)
+            return PipelineResult.Success(
+                traceId = traceUuid,
+                nir = enrichedNir,
+                graph = emptyGraph(),
+                capabilityOperation = "none",
+                completedNodes = 0,
+                summary = summary,
+            )
+        }
+
+        val memoryResults = resolveMemory(enrichedNir, traceUuid)
         val reasoningResult = reasoningEngine.reason(
             ReasoningRequest(
-                nir = nir,
+                nir = enrichedNir,
                 memoryResults = memoryResults,
                 traceId = traceUuid,
             ),
@@ -118,7 +138,7 @@ class CognitivePipelineOrchestrator(
 
         val planningResult = planningService.buildGraph(
             PlanningRequest(
-                nir = nir,
+                nir = enrichedNir,
                 reasoningContext = reasoningContext,
                 traceId = traceUuid,
             ),
@@ -138,13 +158,26 @@ class CognitivePipelineOrchestrator(
 
         when (val policyResult = policyEngine.evaluate(PolicyRequest(graph = graph, traceId = traceUuid))) {
             is PolicyEvaluationResult.Success -> {
-                if (policyResult.decision.type == PolicyDecisionType.REJECTED) {
-                    return PipelineResult.Failure(
-                        traceId = traceUuid,
-                        stage = PipelineStage.POLICY,
-                        error = policyDeniedError(policyResult.decision.rationale),
-                        summary = policyResult.decision.rationale,
-                    )
+                when (policyResult.decision.type) {
+                    PolicyDecisionType.REJECTED ->
+                        return PipelineResult.Failure(
+                            traceId = traceUuid,
+                            stage = PipelineStage.POLICY,
+                            error = policyDeniedError(policyResult.decision.rationale),
+                            summary = policyResult.decision.rationale,
+                        )
+                    PolicyDecisionType.REQUIRES_USER_CONFIRMATION -> {
+                        val prompt = calendarIntentSupport.buildConfirmationPrompt(enrichedNir)
+                        return PipelineResult.PendingConfirmation(
+                            traceId = traceUuid,
+                            nir = enrichedNir,
+                            graph = graph,
+                            capabilityOperation = capabilityOperation,
+                            summary = prompt,
+                            confirmationPrompt = prompt,
+                        )
+                    }
+                    PolicyDecisionType.APPROVED -> Unit
                 }
             }
             is PolicyEvaluationResult.Failure -> {
@@ -160,7 +193,7 @@ class CognitivePipelineOrchestrator(
         when (val executionResult = executionRuntime.execute(ExecutionRequest(graph = graph, traceId = traceUuid))) {
             is ExecutionResult.Success -> {
                 val summary = executionResult.userMessage?.takeIf { it.isNotBlank() }
-                    ?: buildSuccessSummary(nir, capabilityOperation, executionResult.completedNodes)
+                    ?: buildSuccessSummary(enrichedNir, capabilityOperation, executionResult.completedNodes)
                 logger.info(
                     RuntimeModule.EXECUTION.name,
                     summary,
@@ -169,7 +202,7 @@ class CognitivePipelineOrchestrator(
                 )
                 return PipelineResult.Success(
                     traceId = traceUuid,
-                    nir = nir,
+                    nir = enrichedNir,
                     graph = graph,
                     capabilityOperation = capabilityOperation,
                     completedNodes = executionResult.completedNodes,
@@ -236,6 +269,11 @@ class CognitivePipelineOrchestrator(
                     ?: "document"
                 "Looking up $subject for your answer…"
             }
+            nir.goal == "extract_document_content" ||
+                nir.constraints["intentType"] == "extract_document_content" -> {
+                val subject = nir.constraints["documentQuery"] ?: "document"
+                "Extracting content from $subject…"
+            }
             nir.constraints["compoundFlow"] == "search_document_whatsapp" ->
                 if (!recipient.isNullOrBlank()) {
                     "Sharing the matching document with $recipient on WhatsApp."
@@ -245,7 +283,13 @@ class CognitivePipelineOrchestrator(
             capabilityOperation == NovaCapabilityOperations.ALARM_CREATE ->
                 formatAlarmSuccess(nir, label)
             capabilityOperation == NovaCapabilityOperations.CALENDAR_CREATE ->
-                "Calendar event created."
+                if (nir.goal == "schedule_from_message") {
+                    "Proposed calendar event from your latest message."
+                } else {
+                    "Calendar event created."
+                }
+            capabilityOperation == NovaCapabilityOperations.CALENDAR_READ ->
+                "Here's what's on your calendar."
             capabilityOperation == NovaCapabilityOperations.WHATSAPP_SEND_MESSAGE -> {
                 val recipient = nir.constraints["recipient"]
                 if (!recipient.isNullOrBlank()) {

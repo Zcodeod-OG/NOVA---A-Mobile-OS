@@ -190,7 +190,102 @@ object DocumentDateIntelligence {
             scoped
         }
         if (meal.isNullOrBlank()) return timeFiltered.take(maxChars)
-        return extractMealFromSection(timeFiltered, meal, maxChars) ?: timeFiltered
+        extractMealFromSection(timeFiltered, meal, maxChars)?.let { return it }
+        return extractBestMatchingParagraph(timeFiltered, query, minOf(maxChars, DEFAULT_MEAL_SNIPPET_CHARS))
+            ?.takeIf { paragraph -> paragraph.contains(meal, ignoreCase = true) }
+    }
+
+    /**
+     * Extract-mode entry point: scoped verbatim text with query-type char budgets.
+     * Returns null when content cannot be narrowed to the requested day/meal/topic.
+     */
+    fun extractExactSection(
+        query: String,
+        content: String,
+        maxChars: Int = maxCharsForQuery(query),
+        displayMode: String = DISPLAY_MODE_SCOPED,
+        today: LocalDate = LocalDate.now(),
+    ): String? {
+        if (content.isBlank()) return null
+        val plain = DocumentContentNormalizer.toPlainText(content)
+        if (!DocumentContentNormalizer.isGroundedAnswerable(plain)) return null
+        val budget = minOf(maxChars, maxCharsForQuery(query, maxChars))
+        if (displayMode == DISPLAY_MODE_VERBATIM) {
+            return extractLeadSnippet(plain, budget)
+                ?: normalize(plain.take(budget)).takeIf { it.isNotBlank() }
+        }
+        val target = resolveDateTarget(query, today)
+        val meal = detectMealType(query)
+        val scoped = extractScopedSnippet(
+            content = plain,
+            target = target,
+            maxChars = budget,
+            mealType = meal,
+            query = query,
+        ) ?: return null
+        if (meal != null && extractMealFromSection(scoped, meal, budget) == null &&
+            !scoped.contains(meal, ignoreCase = true)
+        ) {
+            return extractBestMatchingParagraph(scoped, query, budget)
+        }
+        return scoped.take(budget).takeIf { it.isNotBlank() }
+    }
+
+    /** Char budget by query type: menu ~150, timetable row ~250, generic extract up to 4000. */
+    fun maxCharsForQuery(query: String, override: Int? = null): Int {
+        override?.takeIf { it > 0 }?.let { return it }
+        val lower = query.lowercase()
+        return when {
+            DocumentContentAnswerExtractor.isTimetableQuery(lower) -> DEFAULT_TIMETABLE_EXTRACT_CHARS
+            detectMealType(lower) != null || Regex("""\b(?:mess\s+menu|menu)\b""").containsMatchIn(lower) ->
+                DEFAULT_MENU_EXTRACT_CHARS
+            else -> DEFAULT_EXTRACT_CHARS
+        }
+    }
+
+    /**
+     * User-facing message when meal/day scoping fails to narrow content.
+     */
+    fun narrowScopeFailureMessage(
+        query: String,
+        meal: String? = detectMealType(query),
+        today: LocalDate = LocalDate.now(),
+    ): String {
+        val target = resolveDateTarget(query, today)
+        val day = target?.date?.dayOfWeek?.getDisplayName(TextStyle.FULL, Locale.ENGLISH)
+        return when {
+            meal != null && day != null ->
+                "Couldn't narrow to $meal for $day in the matched document"
+            meal != null ->
+                "Couldn't narrow to $meal in the matched document"
+            day != null ->
+                "Couldn't narrow to $day in the matched document"
+            else ->
+                "Couldn't extract a scoped section for \"$query\""
+        }
+    }
+
+    private fun extractBestMatchingParagraph(
+        section: String,
+        query: String?,
+        maxChars: Int,
+    ): String? {
+        val blocks = section.split(Regex("""\n\s*\n"""))
+            .map { normalize(it) }
+            .filter { it.isNotBlank() }
+        if (blocks.isEmpty()) {
+            val lines = section.lines().map { it.trim() }.filter { it.isNotBlank() }
+            if (lines.isEmpty()) return null
+            return normalize(lines.take(6).joinToString("\n")).take(maxChars).takeIf { it.isNotBlank() }
+        }
+        val meal = query?.let { detectMealType(it) }
+        if (meal != null) {
+            blocks.firstOrNull { block -> block.contains(meal, ignoreCase = true) }
+                ?.take(maxChars)
+                ?.takeIf { it.isNotBlank() }
+                ?.let { return it }
+        }
+        return blocks.firstOrNull()?.take(maxChars)?.takeIf { it.isNotBlank() }
     }
 
     /**
@@ -506,13 +601,14 @@ object DocumentDateIntelligence {
         sourceFileName: String?,
         sourceModifiedAt: Long? = null,
         reason: UnreadableReason = UnreadableReason.CONTENT_UNREADABLE,
+        today: LocalDate = LocalDate.now(),
     ): String {
         val name = sourceFileName?.trim()?.takeIf { it.isNotBlank() }
         val base = when {
             name == null ->
                 "Couldn't read document content reliably for \"$query\""
             reason == UnreadableReason.NO_DAY_SECTION -> {
-                val day = resolveDateTarget(query)?.date?.dayOfWeek
+                val day = resolveDateTarget(query, today)?.date?.dayOfWeek
                     ?.getDisplayName(TextStyle.FULL, Locale.ENGLISH)
                 if (day != null) {
                     "Found $name but it has no $day schedule section I can extract"
@@ -770,4 +866,9 @@ object DocumentDateIntelligence {
     const val DEFAULT_LEAD_SNIPPET_CHARS = 300
     const val DEFAULT_MEAL_SNIPPET_CHARS = 280
     const val DEFAULT_ANSWER_CHARS = 400
+    const val DEFAULT_MENU_EXTRACT_CHARS = 150
+    const val DEFAULT_TIMETABLE_EXTRACT_CHARS = 250
+    const val DEFAULT_EXTRACT_CHARS = 4_000
+    const val DISPLAY_MODE_SCOPED = "scoped"
+    const val DISPLAY_MODE_VERBATIM = "verbatim"
 }

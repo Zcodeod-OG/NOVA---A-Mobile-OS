@@ -43,7 +43,16 @@ class StubTimeProvider :
         providerId = "stub-time",
         capabilityType = "time",
         version = "1.0.0",
-        operations = setOf("schedule", "alarm", "calendar", "query", "rollback"),
+        operations = setOf(
+            "schedule",
+            "alarm",
+            "calendar",
+            "query",
+            "rollback",
+            com.nova.runtime.models.NovaCapabilityOperations.ALARM_CREATE,
+            com.nova.runtime.models.NovaCapabilityOperations.CALENDAR_READ,
+            com.nova.runtime.models.NovaCapabilityOperations.CALENDAR_CREATE,
+        ),
         permissions = setOf("nova.time"),
     )
 

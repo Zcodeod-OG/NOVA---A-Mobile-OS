@@ -7,7 +7,12 @@ data class SearchRequest(
     val query: String,
     val limit: Int = DEFAULT_LIMIT,
     val offset: Int = 0,
-    val indexOnQuery: Boolean = true,
+    val indexOnQuery: Boolean = false,
+    /** "qa" (default) or "extract" for verbatim content display. */
+    val answerMode: String? = null,
+    val maxDisplayChars: Int? = null,
+    /** "scoped" (date/meal/topic) or "verbatim" (broader excerpt). */
+    val displayMode: String? = null,
 ) {
     init {
         require(query.isNotBlank()) { "Search query must not be blank" }

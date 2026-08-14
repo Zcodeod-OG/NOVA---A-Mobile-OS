@@ -191,6 +191,8 @@ class SearchCapabilityProviderTest {
         override suspend fun getById(embeddingId: UUID) = null
         override fun observeById(embeddingId: UUID) =
             kotlinx.coroutines.flow.emptyFlow<com.nova.runtime.storage.entities.EmbeddingEntity?>()
+        override suspend fun listWithPersistedVectors(): List<com.nova.runtime.storage.entities.EmbeddingEntity> =
+            emptyList()
     }
 
     private class FakePhotoRepository : com.nova.runtime.storage.repository.PhotoRepository {

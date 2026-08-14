@@ -60,6 +60,10 @@ class PlaceholderIntentClassifierTest {
             ),
             Arguments.of("tell me my todays lecture slots", "document_question"),
             Arguments.of("from mess menu show breakfast", "document_question"),
+            Arguments.of("extract content from mess menu", "extract_document_content"),
+            Arguments.of("show me the text in mess menu pdf", "extract_document_content"),
+            Arguments.of("display contents of timetable.pdf", "extract_document_content"),
+            Arguments.of("read out the file mess menu", "extract_document_content"),
             // Plain WhatsApp messages must not collide with document share / document_question
             Arguments.of("send hello to atharv on whatsapp", "send_whatsapp_message"),
             // Channel unspecified → WhatsApp text (not SMS stub)
@@ -84,6 +88,9 @@ class PlaceholderIntentClassifierTest {
             Arguments.of("don't send a whatsapp message to John", "negated_command"),
             // Reminders route to a real alarm (task 1 / auto-recognition)
             Arguments.of("remind me to call mom at 5pm", "set_reminder"),
+            Arguments.of("what's on my calendar tomorrow", "read_calendar"),
+            Arguments.of("add this to my calendar", "schedule_from_message"),
+            Arguments.of("what's important today", "review_important"),
         )
 
         private fun normalized(payload: String): NormalizedObservation {

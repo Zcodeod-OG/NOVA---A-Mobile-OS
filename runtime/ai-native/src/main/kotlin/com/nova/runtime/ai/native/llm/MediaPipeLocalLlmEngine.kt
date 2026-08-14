@@ -49,6 +49,15 @@ class MediaPipeLocalLlmEngine(
             }
         }
 
+    suspend fun preWarm() {
+        withContext(Dispatchers.Default) {
+            if (!isAvailable()) return@withContext
+            mutex.withLock {
+                ensureInference()
+            }
+        }
+    }
+
     private fun ensureInference(): LlmInference? {
         inferenceRef.get()?.let { return it }
         val path = modelFile().absolutePath

@@ -278,6 +278,54 @@ class DocumentDateIntelligenceTest {
     }
 
     @Test
+    fun extractScopedSnippet_dinner_doesNotFallBackToFullDayWhenMealMissing() {
+        val target = DocumentDateIntelligence.DateTarget(date = friday)
+        val sparseFriday = """
+            FRIDAY
+            Breakfast: Aloo Paratha
+            Lunch: Chole Bhature
+        """.trimIndent()
+        val snippet = DocumentDateIntelligence.extractScopedSnippet(
+            content = sparseFriday,
+            target = target,
+            query = "what is todays dinner menu",
+        )
+        assertNull(snippet)
+    }
+
+    @Test
+    fun extractExactSection_scopedMessMenu_returnsMealScopedText() {
+        val snippet = DocumentDateIntelligence.extractExactSection(
+            query = "extract content from todays dinner menu",
+            content = menu,
+            displayMode = DocumentDateIntelligence.DISPLAY_MODE_SCOPED,
+            today = friday,
+        )
+        assertNotNull(snippet)
+        assertTrue(snippet!!.contains("Veg Biryani"))
+        assertFalse(snippet.contains("Chole Bhature"))
+    }
+
+    @Test
+    fun extractExactSection_verbatim_returnsLeadContent() {
+        val snippet = DocumentDateIntelligence.extractExactSection(
+            query = "extract content from bookly prospectus",
+            content = menu,
+            displayMode = DocumentDateIntelligence.DISPLAY_MODE_VERBATIM,
+            today = friday,
+        )
+        assertNotNull(snippet)
+        assertTrue(snippet!!.contains("WEEKLY MESS MENU"))
+    }
+
+    @Test
+    fun maxCharsForQuery_menuAndTimetableBudgets() {
+        assertEquals(150, DocumentDateIntelligence.maxCharsForQuery("todays dinner menu"))
+        assertEquals(250, DocumentDateIntelligence.maxCharsForQuery("todays lec slots"))
+        assertEquals(4000, DocumentDateIntelligence.maxCharsForQuery("bookly prospectus report"))
+    }
+
+    @Test
     fun formatAnswer_todayDinner() {
         val answer = DocumentDateIntelligence.formatAnswer(
             query = "what is todays dinner menu",

@@ -9,6 +9,7 @@ import com.nova.runtime.ai.model.ModelDownloadSessionState
 import com.nova.runtime.ai.model.ModelFilePhase
 import com.nova.runtime.ai.model.ModelLoader
 import com.nova.runtime.app.ui.components.ActivityItem
+import com.nova.runtime.app.ui.components.ContentDetailState
 import com.nova.runtime.conversation.speech.SpeechRecognizer
 import com.nova.runtime.events.EventBus
 import com.nova.runtime.events.RuntimeEvent
@@ -77,6 +78,9 @@ class NovaOsViewModel(
 
     private val _indexingStatus = MutableStateFlow<String?>(null)
     val indexingStatus: StateFlow<String?> = _indexingStatus.asStateFlow()
+
+    private val _contentDetail = MutableStateFlow<ContentDetailState?>(null)
+    val contentDetail: StateFlow<ContentDetailState?> = _contentDetail.asStateFlow()
 
     private var lastLoggedDownloadPhase: ModelDownloadPhase? = null
     private val loggedFilePhases = mutableSetOf<String>()
@@ -363,6 +367,16 @@ class NovaOsViewModel(
                             )
                         }
                     }
+                    is PipelineResult.PendingConfirmation -> {
+                        prependActivity(
+                            ActivityItem(
+                                timestamp = now(),
+                                source = "CONFIRMATION",
+                                message = result.confirmationPrompt,
+                                isAlert = true,
+                            ),
+                        )
+                    }
                     is PipelineResult.Failure -> {
                         val detail = buildString {
                             append("Failed: ${result.summary}")
@@ -482,6 +496,14 @@ class NovaOsViewModel(
         )
     }
 
+    fun dismissContentDetail() {
+        _contentDetail.value = null
+    }
+
+    fun showContentDetail(state: ContentDetailState) {
+        _contentDetail.value = state
+    }
+
     private suspend fun replayMissedRuntimeEvents() {
         eventBus.publishedEvents()
             .filter { it.eventType in BOOT_REPLAY_EVENTS }
@@ -539,10 +561,39 @@ class NovaOsViewModel(
                 val payload = event.payload as? Map<*, *>
                 val answer = payload?.get("userMessage")?.toString()
                     ?: payload?.get("answer")?.toString()
+                val answerMode = payload?.get("answerMode")?.toString()
+                val contentSnippet = payload?.get("contentSnippet")?.toString()
+                val sourceFileName = payload?.get("sourceFileName")?.toString()
+                val sourceModifiedAt = payload?.get("sourceModifiedAt")?.toString()?.toLongOrNull()
+                val fullContent = contentSnippet?.takeIf { it.isNotBlank() }
+                    ?: if (answerMode == ANSWER_MODE_EXTRACT) answer else null
                 if (!answer.isNullOrBlank()) {
                     lastCommandCapabilityMessage = answer
                 }
-                if (!answer.isNullOrBlank()) answer else "Capability executed successfully"
+                if (answerMode == ANSWER_MODE_EXTRACT && !fullContent.isNullOrBlank()) {
+                    _contentDetail.value = ContentDetailState(
+                        text = fullContent,
+                        fileName = sourceFileName,
+                        modifiedAtMillis = sourceModifiedAt,
+                        answerMode = answerMode,
+                    )
+                }
+                val displayMessage = if (!answer.isNullOrBlank()) answer else "Capability executed successfully"
+                return ActivityItem(
+                    timestamp = formatTimestamp(event.timestamp),
+                    source = moduleLabel(event.sourceModule),
+                    message = displayMessage,
+                    isAlert = event.eventType in ALERT_EVENTS,
+                    fullContent = fullContent,
+                    answerMode = answerMode,
+                    sourceFileName = sourceFileName,
+                    sourceModifiedAtMillis = sourceModifiedAt,
+                    expandable = shouldExpandContent(
+                        answerMode = answerMode,
+                        fullContent = fullContent,
+                        message = displayMessage,
+                    ),
+                )
             }
             CapabilityEvents.FAILED -> {
                 val payload = event.payload as? Map<*, *>
@@ -748,7 +799,20 @@ class NovaOsViewModel(
         PipelineStage.EXECUTION -> "EXECUTION"
     }
 
+    private fun shouldExpandContent(
+        answerMode: String?,
+        fullContent: String?,
+        message: String,
+    ): Boolean {
+        if (fullContent.isNullOrBlank()) return false
+        if (answerMode == ANSWER_MODE_EXTRACT) return true
+        return message.length > EXPANDABLE_ANSWER_THRESHOLD ||
+            fullContent.length > EXPANDABLE_ANSWER_THRESHOLD
+    }
+
     companion object {
+        private const val ANSWER_MODE_EXTRACT = "extract"
+        private const val EXPANDABLE_ANSWER_THRESHOLD = 400
         private const val MAX_FEED_ITEMS = 50
         private const val COMMAND_TIMEOUT_MS = 60_000L
         private const val INDEXING_READY_DISPLAY_MS = 2_500L

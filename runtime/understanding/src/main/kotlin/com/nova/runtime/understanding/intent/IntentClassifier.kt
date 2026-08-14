@@ -134,7 +134,17 @@ class PlaceholderIntentClassifier : IntentClassifier {
             return true
         }
 
+        fun looksLikeDocumentExtract(payload: String): Boolean {
+            if ("whatsapp" in payload || "share" in payload) return false
+            if (EXTRACT_CONTENT_REGEX.containsMatchIn(payload)) return true
+            return Regex("""\bextract\b.+\b(?:from|in)\b""").containsMatchIn(payload) &&
+                DOCUMENT_SHARE_NOUNS.any { noun ->
+                    Regex("""\b${Regex.escape(noun)}\b""").containsMatchIn(payload)
+                }
+        }
+
         fun looksLikeDocumentQuestion(payload: String): Boolean {
+            if (looksLikeDocumentExtract(payload)) return false
             // Never steal WhatsApp / share send paths.
             if ("whatsapp" in payload || "share" in payload) return false
             if (SEND_TO_REGEX.containsMatchIn(payload) && "whatsapp" !in payload) {
@@ -222,6 +232,11 @@ class PlaceholderIntentClassifier : IntentClassifier {
             """\b(?:today'?s?|tonight|tomorrow'?s?|yesterday'?s?|this\s+month(?:'?s|s)?|month'?s)\b""",
         )
 
+        private val EXTRACT_CONTENT_REGEX = Regex(
+            """\b(?:extract\s+(?:content|text)|show\s+me\s+the\s+text\s+in|display\s+contents?\s+of|read\s+out\s+(?:the\s+)?file)\b""",
+            RegexOption.IGNORE_CASE,
+        )
+
         private val INTENT_PATTERNS = listOf(
             // Document/file → WhatsApp (channel optional; WhatsApp is the default when a recipient is present).
             // Question forms ("tell me…", "from X show…") stay in-app via document_question.
@@ -249,6 +264,10 @@ class PlaceholderIntentClassifier : IntentClassifier {
                             looksLikeSendToContact(payload)
                         )
             },
+            // "extract content from mess menu" / "show me the text in timetable.pdf"
+            IntentPattern("extract_document_content") { payload ->
+                looksLikeDocumentExtract(payload)
+            },
             // "what is todays dinner menu" / "from timetable tell me…" → in-app answer
             IntentPattern("document_question") { payload ->
                 looksLikeDocumentQuestion(payload)
@@ -269,6 +288,40 @@ class PlaceholderIntentClassifier : IntentClassifier {
             IntentPattern("set_alarm") { payload ->
                 ("alarm" in payload && listOf("set", "create", "for", "at").any { it in payload }) ||
                     WAKE_ME_REGEX.containsMatchIn(payload)
+            },
+            IntentPattern("read_calendar") { payload ->
+                READ_CALENDAR_REGEX.containsMatchIn(payload) ||
+                    (
+                        ("calendar" in payload || "schedule" in payload) &&
+                            listOf("what's on", "whats on", "show me", "read", "look at", "check").any { it in payload } &&
+                            listOf("tomorrow", "today", "this week", "next week", "monday", "tuesday", "wednesday",
+                                "thursday", "friday", "saturday", "sunday",
+                            ).any { it in payload }
+                        )
+            },
+            IntentPattern("schedule_from_message") { payload ->
+                listOf(
+                    "add this to my calendar",
+                    "put this on my calendar",
+                    "schedule the meeting from",
+                    "schedule from that message",
+                    "schedule from that email",
+                    "add to calendar from",
+                    "calendar from that email",
+                    "calendar from that message",
+                ).any { phrase -> phrase in payload }
+            },
+            IntentPattern("review_important") { payload ->
+                listOf(
+                    "what's important today",
+                    "whats important today",
+                    "what is important today",
+                    "summarize urgent",
+                    "urgent messages",
+                    "important messages today",
+                    "what's urgent",
+                    "whats urgent",
+                ).any { phrase -> phrase in payload }
             },
             IntentPattern("create_calendar_event") { payload ->
                 ("calendar" in payload || "event" in payload || "meeting" in payload) &&
@@ -305,6 +358,11 @@ class PlaceholderIntentClassifier : IntentClassifier {
 
         /** "wake me at 6:30", "wake me up at 7am" — treat as set_alarm. */
         private val WAKE_ME_REGEX = Regex("""\bwake\s+me(?:\s+up)?\b""")
+
+        private val READ_CALENDAR_REGEX = Regex(
+            """\bwhat(?:'?s|s)?\s+on\s+my\s+calendar\b""",
+            RegexOption.IGNORE_CASE,
+        )
 
         private val LEGACY_KEYWORDS = listOf(
             listOf("remind", "reminder") to "set_reminder",

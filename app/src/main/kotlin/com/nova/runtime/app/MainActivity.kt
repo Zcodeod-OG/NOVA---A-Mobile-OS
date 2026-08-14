@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
         requestMissingRuntimePermissions()
         ensureExactAlarmPermission()
         ensureAllFilesAccess()
+        ensureNotificationListenerAccess()
         setContent {
             val kernelState by runtimeKernel.lifecycleManager.state.collectAsState()
             LaunchedEffect(kernelState) {
@@ -120,10 +121,28 @@ class MainActivity : ComponentActivity() {
         runCatching { startActivity(intent) }
     }
 
+    /**
+     * WhatsApp ingestion requires the notification listener — prompt once to open settings.
+     */
+    private fun ensureNotificationListenerAccess() {
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_NOTIFICATION_LISTENER_PROMPTED, false)) return
+        val enabled =
+            Settings.Secure.getString(
+                contentResolver,
+                "enabled_notification_listeners",
+            ).orEmpty().contains(packageName)
+        if (enabled) return
+        prefs.edit().putBoolean(KEY_NOTIFICATION_LISTENER_PROMPTED, true).apply()
+        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+        runCatching { startActivity(intent) }
+    }
+
     companion object {
         const val EXTRA_COMMAND = "nova_command"
         private const val PREFS = "nova_runtime_prefs"
         private const val KEY_EXACT_ALARM_PROMPTED = "exact_alarm_prompted"
         private const val KEY_ALL_FILES_PROMPTED = "all_files_prompted"
+        private const val KEY_NOTIFICATION_LISTENER_PROMPTED = "notification_listener_prompted"
     }
 }

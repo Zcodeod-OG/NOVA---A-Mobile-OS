@@ -23,16 +23,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.nova.runtime.app.ui.components.ActivityStream
 import com.nova.runtime.app.ui.components.CommandBar
+import com.nova.runtime.app.ui.components.ContentDetailSheet
 import com.nova.runtime.app.ui.components.ModelDownloadOverlay
 import com.nova.runtime.app.ui.components.SystemHeader
 import com.nova.runtime.app.ui.theme.NovaColors
 import com.nova.runtime.app.voice.VoiceCaptureController
+import com.nova.runtime.app.ui.onboarding.ProfileOnboardingScreen
+import com.nova.runtime.app.ui.onboarding.ProfileOnboardingViewModel
 import com.nova.runtime.ai.model.ModelDownloadPhase
+import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun NovaOsScreen(
     viewModel: NovaOsViewModel,
     modifier: Modifier = Modifier,
+    onboardingViewModel: ProfileOnboardingViewModel = koinViewModel(),
 ) {
     val lifecycleState by viewModel.lifecycleState.collectAsState()
     val activityFeed by viewModel.activityFeed.collectAsState()
@@ -42,6 +47,8 @@ fun NovaOsScreen(
     val whisperAvailable by viewModel.whisperAvailable.collectAsState()
     val modelDownloadState by viewModel.modelDownloadState.collectAsState()
     val indexingStatus by viewModel.indexingStatus.collectAsState()
+    val contentDetail by viewModel.contentDetail.collectAsState()
+    val showOnboarding by onboardingViewModel.showOnboarding.collectAsState()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -113,10 +120,20 @@ fun NovaOsScreen(
 
             ActivityStream(
                 activities = activityFeed,
+                onExpandContent = viewModel::showContentDetail,
                 modifier = Modifier
                     .weight(1f)
                     .padding(bottom = 16.dp),
             )
+        }
+
+        ContentDetailSheet(
+            state = contentDetail,
+            onDismiss = viewModel::dismissContentDetail,
+        )
+
+        if (showOnboarding) {
+            ProfileOnboardingScreen(viewModel = onboardingViewModel)
         }
     }
 }

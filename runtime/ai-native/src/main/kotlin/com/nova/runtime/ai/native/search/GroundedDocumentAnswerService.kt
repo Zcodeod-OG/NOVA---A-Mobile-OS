@@ -2,6 +2,7 @@ package com.nova.runtime.ai.native.search
 
 import com.nova.runtime.ai.model.LocalLlmEngine
 import com.nova.runtime.ai.model.UnavailableLocalLlmEngine
+import java.time.LocalDate
 import com.nova.runtime.storage.search.DocumentContentAnswerExtractor
 import com.nova.runtime.storage.search.DocumentContentNormalizer
 import com.nova.runtime.storage.search.DocumentDateIntelligence
@@ -18,6 +19,8 @@ class GroundedDocumentAnswerService(
         contentSnippet: String?,
         sourceFileName: String?,
         sourceModifiedAt: Long?,
+        answerMode: String = ANSWER_MODE_QA,
+        referenceDate: LocalDate = LocalDate.now(),
     ): String {
         val snippet = contentSnippet?.trim()?.takeIf { it.isNotBlank() }
         if (snippet == null || !DocumentContentNormalizer.isGroundedAnswerable(snippet)) {
@@ -30,6 +33,15 @@ class GroundedDocumentAnswerService(
                 } else {
                     DocumentDateIntelligence.UnreadableReason.CONTENT_UNREADABLE
                 },
+                today = referenceDate,
+            )
+        }
+
+        if (answerMode == ANSWER_MODE_EXTRACT) {
+            return DocumentDateIntelligence.withSourceAttribution(
+                answer = snippet,
+                fileName = sourceFileName,
+                modifiedAtMillis = sourceModifiedAt,
             )
         }
 
@@ -38,9 +50,10 @@ class GroundedDocumentAnswerService(
             snippet = snippet,
             sourceFileName = sourceFileName,
             sourceModifiedAt = sourceModifiedAt,
+            today = referenceDate,
         )
 
-        if (!localLlmEngine.isAvailable()) return extractive
+        if (shouldSkipLlmRewrite(query, snippet) || !localLlmEngine.isAvailable()) return extractive
 
         val prompt = buildGroundedPrompt(
             query = query,
@@ -56,6 +69,7 @@ class GroundedDocumentAnswerService(
                 sourceFileName = sourceFileName,
                 sourceModifiedAt = sourceModifiedAt,
                 reason = DocumentDateIntelligence.UnreadableReason.CONTENT_UNREADABLE,
+                today = referenceDate,
             )
         }
 
@@ -64,6 +78,7 @@ class GroundedDocumentAnswerService(
             snippet = generated.take(MAX_ANSWER_CHARS),
             sourceFileName = sourceFileName,
             sourceModifiedAt = sourceModifiedAt,
+            today = referenceDate,
         )
         // If formatAnswer wraps timetable heuristics poorly around LLM prose, keep LLM + attribution.
         return if (DocumentContentNormalizer.isGroundedAnswerable(attributed)) {
@@ -71,6 +86,16 @@ class GroundedDocumentAnswerService(
         } else {
             extractive
         }
+    }
+
+    private fun shouldSkipLlmRewrite(query: String, snippet: String): Boolean {
+        if (!DocumentContentNormalizer.isGroundedAnswerable(snippet)) return false
+        val lower = query.lowercase()
+        val isMenuQuery = "menu" in lower || "mess" in lower ||
+            DocumentDateIntelligence.detectMealType(query) != null
+        val isTimetableQuery = DocumentContentAnswerExtractor.isTimetableQuery(query)
+        val isSlotQuery = DocumentContentAnswerExtractor.parseTimeRange(query) != null
+        return isMenuQuery || isTimetableQuery || isSlotQuery
     }
 
     private fun buildGroundedPrompt(
@@ -119,6 +144,8 @@ class GroundedDocumentAnswerService(
             .toSet()
 
     companion object {
+        const val ANSWER_MODE_QA = "qa"
+        const val ANSWER_MODE_EXTRACT = "extract"
         private const val MAX_CONTEXT_CHARS = 6_000
         private const val MAX_ANSWER_CHARS = 1_200
         private const val MIN_TOKEN_OVERLAP = 0.18

@@ -5,6 +5,7 @@ import com.nova.runtime.ai.model.EmbeddingResult
 import com.nova.runtime.ai.model.ImageEmbeddingGenerator
 import com.nova.runtime.ai.native.indexing.EmbeddingMetadata
 import com.nova.runtime.ai.native.ingestion.FullDeviceIndexer
+import com.nova.runtime.ai.native.ingestion.IndexingCheckpointStore
 import com.nova.runtime.ai.native.ingestion.MediaStoreIngestionService
 import com.nova.runtime.ai.native.storage.CosineVectorIndex
 import com.nova.runtime.models.RuntimeModule
@@ -21,6 +22,7 @@ import com.nova.runtime.storage.search.SearchRequest
 import com.nova.runtime.storage.search.SemanticSearchHit
 import com.nova.runtime.storage.vector.VectorSearchRequest
 import com.nova.runtime.utils.logging.NovaLogger
+import java.util.Collections
 import java.util.UUID
 import kotlin.system.measureTimeMillis
 
@@ -41,8 +43,15 @@ class SemanticSearchService(
     private val searchIndexPipeline: SearchIndexPipeline,
     private val mediaStoreIngestionService: MediaStoreIngestionService,
     private val fullDeviceIndexer: FullDeviceIndexer? = null,
+    private val indexingCheckpointStore: IndexingCheckpointStore? = null,
     private val logger: NovaLogger,
 ) {
+    private val queryEmbeddingCache = Collections.synchronizedMap(
+        object : LinkedHashMap<String, FloatArray>(QUERY_EMBEDDING_CACHE_MAX + 1, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, FloatArray>?): Boolean =
+                size > QUERY_EMBEDDING_CACHE_MAX
+        },
+    )
     suspend fun search(
         request: SearchRequest,
         traceId: UUID,
@@ -60,7 +69,7 @@ class SemanticSearchService(
         var page: SearchPage<SemanticSearchHit> = emptyPage(request)
 
         val latencyMs = measureTimeMillis {
-            if (request.indexOnQuery) {
+            if (shouldRunIndexCatchUp(request)) {
                 fullDeviceIndexer?.runPrioritySync() ?: mediaStoreIngestionService.ensureSynced()
                 searchIndexPipeline.ensureIndexed(
                     SearchIndexPipeline.IndexRequest(
@@ -69,6 +78,7 @@ class SemanticSearchService(
                         documentLimit = PRIORITY_INDEX_DOCUMENT_LIMIT,
                     ),
                 )
+                indexingCheckpointStore?.markPrioritySyncAt()
             }
 
             val fetchK = (request.offset + request.limit).coerceAtMost(SearchRequest.MAX_LIMIT)
@@ -133,6 +143,16 @@ class SemanticSearchService(
         return page
     }
 
+    internal fun shouldRunIndexCatchUp(request: SearchRequest): Boolean {
+        if (request.indexOnQuery) return true
+        if (vectorIndex.size() == 0) return true
+        val checkpointStore = indexingCheckpointStore ?: return false
+        val lastSyncAt = checkpointStore.getLastPrioritySyncAt()
+        if (lastSyncAt == 0L) return false
+        val ageMs = System.currentTimeMillis() - lastSyncAt
+        return ageMs > CATCH_UP_STALE_MS
+    }
+
     private suspend fun searchIndexedObjects(
         query: String,
         traceId: UUID,
@@ -143,9 +163,16 @@ class SemanticSearchService(
 
         val hits = mutableListOf<RankedObjectHit>()
         val k = fetchK.coerceAtLeast(1)
+        val needsTextEmbedding = OBJECT_TYPE_DOCUMENT in objectTypes ||
+            (OBJECT_TYPE_PHOTO in objectTypes)
+        val textQueryVector = if (needsTextEmbedding) {
+            embedTextQuery(query, traceId)
+        } else {
+            null
+        }
 
         if (OBJECT_TYPE_DOCUMENT in objectTypes) {
-            embedTextQuery(query, traceId)?.let { queryVector ->
+            textQueryVector?.let { queryVector ->
                 // Prefer Stage A summary embeddings; fall back to untyped document vectors
                 // so pre-migration indexes still resolve until backfill completes.
                 val summaryHits = vectorIndex.search(
@@ -186,7 +213,7 @@ class SemanticSearchService(
                 ).map { RankedObjectHit(it.objectId, it.objectType, it.score) }
             }
 
-            embedTextQuery(query, traceId)?.let { queryVector ->
+            textQueryVector?.let { queryVector ->
                 hits += vectorIndex.search(
                     VectorSearchRequest(
                         queryVector = queryVector,
@@ -248,9 +275,15 @@ class SemanticSearchService(
             }
     }
 
-    private suspend fun embedTextQuery(query: String, traceId: UUID): FloatArray? =
-        when (val result = embeddingGenerator.embed(query)) {
-            is EmbeddingResult.Success -> result.vector
+    private suspend fun embedTextQuery(query: String, traceId: UUID): FloatArray? {
+        val cacheKey = normalizeQueryForCache(query)
+        queryEmbeddingCache[cacheKey]?.let { return it.copyOf() }
+
+        return when (val result = embeddingGenerator.embed(query)) {
+            is EmbeddingResult.Success -> {
+                queryEmbeddingCache[cacheKey] = result.vector.copyOf()
+                result.vector
+            }
             is EmbeddingResult.Failure -> {
                 logger.warn(
                     module = RuntimeModule.STORAGE.name,
@@ -260,6 +293,7 @@ class SemanticSearchService(
                 null
             }
         }
+    }
 
     private suspend fun embedImageQuery(query: String, traceId: UUID): FloatArray? =
         when (val result = imageEmbeddingGenerator.embedQuery(query)) {
@@ -553,7 +587,10 @@ class SemanticSearchService(
         private const val FTS_CONTENT_HIT_WEIGHT = 0.35f
         /** On-query indexing batch — larger than background default so Downloads/PDFs appear quickly. */
         private const val PRIORITY_INDEX_DOCUMENT_LIMIT = 75
-        private const val FORCE_EXTRACT_TOP_K = 8
+        private const val FORCE_EXTRACT_TOP_K = 2
+        /** Re-run priority ingest when the in-memory index is empty or older than this. */
+        private const val CATCH_UP_STALE_MS = 15L * 60 * 1000
+        private const val QUERY_EMBEDDING_CACHE_MAX = 32
         /** Scales [DocumentContentNormalizer.timetableStructureScore] into ranking space. */
         private const val TIMETABLE_STRUCTURE_BOOST_SCALE = 0.08f
         private const val TIMETABLE_STRUCTURE_BOOST_CAP = 3.5f
@@ -583,5 +620,7 @@ class SemanticSearchService(
                 .split(Regex("[^a-z0-9]+"))
                 .filter { it.length > 1 }
                 .toSet()
+
+        internal fun normalizeQueryForCache(query: String): String = query.trim().lowercase()
     }
 }

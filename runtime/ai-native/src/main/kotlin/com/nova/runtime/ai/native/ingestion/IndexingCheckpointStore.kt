@@ -45,6 +45,12 @@ class IndexingCheckpointStore(
 
     fun getLastFullCycleAt(): Long = prefs.getLong(KEY_LAST_FULL_CYCLE_AT, 0L)
 
+    fun markPrioritySyncAt() {
+        prefs.edit().putLong(KEY_LAST_PRIORITY_SYNC_AT, System.currentTimeMillis()).apply()
+    }
+
+    fun getLastPrioritySyncAt(): Long = prefs.getLong(KEY_LAST_PRIORITY_SYNC_AT, 0L)
+
     fun resetCategory(category: IndexCategory) {
         setOffset(category, 0)
     }
@@ -56,6 +62,7 @@ class IndexingCheckpointStore(
         const val KEY_CURRENT_CATEGORY = "current_category"
         const val KEY_TOTAL_INDEXED = "total_indexed"
         const val KEY_LAST_FULL_CYCLE_AT = "last_full_cycle_at"
+        const val KEY_LAST_PRIORITY_SYNC_AT = "last_priority_sync_at"
     }
 }
 

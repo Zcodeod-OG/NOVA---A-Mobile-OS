@@ -29,4 +29,7 @@ interface EmbeddingDao {
 
     @Query("SELECT * FROM embeddings WHERE objectId = :objectId")
     suspend fun getByObjectId(objectId: UUID): List<EmbeddingEntity>
+
+    @Query("SELECT * FROM embeddings WHERE vectorBlob IS NOT NULL")
+    suspend fun listWithPersistedVectors(): List<EmbeddingEntity>
 }

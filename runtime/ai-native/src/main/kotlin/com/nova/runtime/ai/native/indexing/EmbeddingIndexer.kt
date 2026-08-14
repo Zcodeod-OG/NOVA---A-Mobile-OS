@@ -8,6 +8,7 @@ import com.nova.runtime.ai.model.OcrResult
 import com.nova.runtime.ai.native.storage.CosineVectorIndex
 import com.nova.runtime.storage.entities.EmbeddingEntity
 import com.nova.runtime.storage.repository.EmbeddingRepository
+import com.nova.runtime.storage.vector.VectorBlobCodec
 import java.util.UUID
 
 /** Coordinates OCR, embedding generation, metadata persistence, and vector indexing. */
@@ -107,6 +108,8 @@ class EmbeddingIndexer(
                 modelVersion = modelVersion,
                 dimension = dimension,
                 createdAt = System.currentTimeMillis(),
+                vectorBlob = VectorBlobCodec.encode(vector),
+                embeddingKind = embeddingKind,
             ),
         )
         vectorIndex.insert(

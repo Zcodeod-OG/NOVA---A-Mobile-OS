@@ -16,6 +16,9 @@ val androidCapabilityModule = module {
                 context = androidContext(),
                 adapters = get<AndroidAdapterLayer>(),
                 logger = get<NovaLogger>(),
+                oauthManager = get(),
+                gmailSyncService = get(),
+                messageRepository = get(),
             ),
         )
     }

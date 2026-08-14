@@ -200,9 +200,10 @@ class AndroidCapabilityProviderTest {
 
     @Test
     fun productionCapabilityProviders_includesAndroidAndStubProviders() {
-        val providers = productionCapabilityProviders(context, adapters, logger)
+        val providers = productionCapabilityProvidersForTest(context, adapters, logger)
         val providerIds = providers.map { it.providerId }.toSet()
         assertTrue("android-communication" in providerIds)
+        assertTrue("android-email" in providerIds)
         assertTrue("android-time" in providerIds)
         assertTrue("android-media" in providerIds)
         assertTrue("stub-knowledge" in providerIds)

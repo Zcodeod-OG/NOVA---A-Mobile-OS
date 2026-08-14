@@ -12,12 +12,15 @@ import com.nova.runtime.android.calendarAdapter.CalendarAdapter
 import com.nova.runtime.android.calendarAdapter.CalendarAdapterImpl
 import com.nova.runtime.android.contactsAdapter.ContactsAdapter
 import com.nova.runtime.android.contactsAdapter.ContactsAdapterImpl
+import com.nova.runtime.android.email.GmailOAuthManager
+import com.nova.runtime.android.email.GmailSyncService
 import com.nova.runtime.android.intentAdapter.IntentAdapter
 import com.nova.runtime.android.intentAdapter.IntentAdapterImpl
 import com.nova.runtime.android.mediaStoreAdapter.MediaStoreAdapter
 import com.nova.runtime.android.mediaStoreAdapter.MediaStoreAdapterImpl
 import com.nova.runtime.android.notificationAdapter.NotificationAdapter
 import com.nova.runtime.android.notificationAdapter.NotificationAdapterImpl
+import com.nova.runtime.android.notificationAdapter.WhatsAppMessageIngestionService
 import com.nova.runtime.android.ocrAdapter.OcrAdapter
 import com.nova.runtime.android.ocrAdapter.OcrAdapterStub
 import com.nova.runtime.android.storageAccessAdapter.StorageAccessAdapter
@@ -43,7 +46,10 @@ val androidAdapterModule = module {
     single<MediaStoreQueryPort> { MediaStoreQueryPortImpl(get()) }
     single<DownloadsQueryPort> { DownloadsQueryPortImpl(androidContext()) }
     single<DocumentsQueryPort> { DocumentsQueryPortImpl(androidContext()) }
-    single<NotificationAdapter> { NotificationAdapterImpl(androidContext(), get()) }
+    single<NotificationAdapter> { NotificationAdapterImpl(androidContext(), get(), get()) }
+    single { WhatsAppMessageIngestionService(get(), get()) }
+    single { GmailOAuthManager(androidContext()) }
+    single { GmailSyncService(get(), get(), get()) }
     single<AccessibilityAdapter> { AccessibilityAdapterImpl(get(), get()) }
     single<StorageAccessAdapter> { StorageAccessAdapterImpl(androidContext(), get()) }
     single<OcrAdapter> { OcrAdapterStub() }
@@ -72,7 +78,10 @@ internal fun androidAdapterTestModule(logger: NovaLogger) = module {
     single<MediaStoreQueryPort> { MediaStoreQueryPortImpl(get()) }
     single<DownloadsQueryPort> { DownloadsQueryPortImpl(androidContext()) }
     single<DocumentsQueryPort> { DocumentsQueryPortImpl(androidContext()) }
-    single<NotificationAdapter> { NotificationAdapterImpl(androidContext(), logger) }
+    single<NotificationAdapter> { NotificationAdapterImpl(androidContext(), logger, get()) }
+    single { WhatsAppMessageIngestionService(get(), logger) }
+    single { GmailOAuthManager(androidContext()) }
+    single { GmailSyncService(get(), get(), logger) }
     single<AccessibilityAdapter> { AccessibilityAdapterImpl(get(), logger) }
     single<StorageAccessAdapter> { StorageAccessAdapterImpl(androidContext(), logger) }
     single<OcrAdapter> { OcrAdapterStub() }

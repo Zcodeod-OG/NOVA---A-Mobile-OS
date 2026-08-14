@@ -14,7 +14,7 @@ import com.nova.runtime.events.InMemoryEventBus
 import com.nova.runtime.kernel.RuntimeKernel
 import com.nova.runtime.kernel.di.kernelModule
 import com.nova.runtime.memory.MemoryPlatform
-import com.nova.runtime.memory.MemoryPlatformStub
+import com.nova.runtime.app.memory.PreferenceMemoryPlatform
 import com.nova.runtime.planner.di.plannerModule
 import com.nova.runtime.policy.di.policyModule
 import com.nova.runtime.reasoning.di.reasoningModule
@@ -25,7 +25,7 @@ import org.koin.dsl.module
 
 /** Sprint 0 service stubs wired alongside Sprint 1 kernel infrastructure. */
 val sprint0StubsModule = module {
-    single<MemoryPlatform> { MemoryPlatformStub(get()) }
+    single<MemoryPlatform> { PreferenceMemoryPlatform(get(), get(), get()) }
 }
 
 val conversationPersistenceModule = module {

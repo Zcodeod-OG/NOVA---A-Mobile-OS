@@ -4,6 +4,7 @@ import com.nova.runtime.storage.entities.ContactEntity
 import com.nova.runtime.storage.entities.DocumentEntity
 import com.nova.runtime.storage.entities.EmbeddingEntity
 import com.nova.runtime.storage.entities.ExecutionHistoryEntity
+import com.nova.runtime.storage.entities.MessageEntity
 import com.nova.runtime.storage.entities.PhotoEntity
 import com.nova.runtime.storage.entities.PreferenceEntity
 import com.nova.runtime.storage.entities.ProjectEntity
@@ -115,4 +116,30 @@ interface EmbeddingRepository {
     suspend fun getById(embeddingId: UUID): EmbeddingEntity?
 
     fun observeById(embeddingId: UUID): Flow<EmbeddingEntity?>
+
+    suspend fun listWithPersistedVectors(): List<EmbeddingEntity>
+}
+
+interface MessageRepository {
+    suspend fun insert(message: MessageEntity): Boolean
+
+    suspend fun update(message: MessageEntity)
+
+    suspend fun getById(id: UUID): MessageEntity?
+
+    suspend fun getByExternalId(externalId: String): MessageEntity?
+
+    suspend fun listByChannel(channel: String, limit: Int = 50): List<MessageEntity>
+
+    suspend fun listUnindexed(limit: Int = 32): List<MessageEntity>
+
+    suspend fun search(channel: String, query: String, limit: Int = 25): List<MessageEntity>
+
+    suspend fun countByChannel(channel: String): Int
+
+    suspend fun getRecent(limit: Int): List<MessageEntity>
+
+    suspend fun getHighImportance(limit: Int): List<MessageEntity>
+
+    suspend fun getSince(since: Long): List<MessageEntity>
 }

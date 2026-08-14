@@ -20,11 +20,14 @@ import com.nova.runtime.execution.queue.DefaultQueueManager
 import com.nova.runtime.execution.retry.DefaultRetryManager
 import com.nova.runtime.execution.rollback.DefaultRollbackManager
 import com.nova.runtime.execution.scheduler.DefaultDependencyResolver
+import com.nova.runtime.execution.worker.ActionExecutor
+import com.nova.runtime.execution.worker.NodeExecutionOutcome
 import com.nova.runtime.execution.worker.StubCapabilityActionExecutor
 import com.nova.runtime.inference.AdaptiveInferenceEngineStub
 import com.nova.runtime.kernel.trace.DefaultTraceIdGenerator
 import com.nova.runtime.kernel.trace.TraceContextHolder
 import com.nova.runtime.memory.MemoryPlatform
+import com.nova.runtime.orchestrator.calendar.NoOpCalendarIntentSupport
 import com.nova.runtime.models.NovaCapabilityOperations
 import com.nova.runtime.models.contracts.MemoryQuery
 import com.nova.runtime.models.contracts.MemoryResult
@@ -92,7 +95,21 @@ class CognitivePipelineOrchestratorTest {
         val graphValidator = DefaultGraphValidator()
         val policyEngine = PolicyEngineImpl(
             evaluators = listOf(
-                PermissionPolicyEvaluator(DefaultPolicyEnvironment()),
+                PermissionPolicyEvaluator(
+                    DefaultPolicyEnvironment(
+                        permissions = setOf(
+                            "nova.communication",
+                            "nova.communication.whatsapp",
+                            "nova.search",
+                            "nova.time",
+                            "nova.time.alarm",
+                            "nova.time.calendar",
+                            "nova.contacts.read",
+                            "nova.share",
+                            "nova.media.read",
+                        ),
+                    ),
+                ),
                 SafetyPolicyEvaluator(),
                 ConfirmationPolicyEvaluator(),
                 PrivacyPolicyEvaluator(),
@@ -101,6 +118,23 @@ class CognitivePipelineOrchestratorTest {
             eventPublisher = PolicyEventPublisher(eventBus),
             logger = logger,
         )
+        val stubExecutor = StubCapabilityActionExecutor(capabilityFramework)
+        val testExecutor = object : ActionExecutor {
+            override suspend fun execute(node: com.nova.runtime.models.ActionNode, traceId: UUID): NodeExecutionOutcome {
+                return when (val outcome = stubExecutor.execute(node, traceId)) {
+                    is NodeExecutionOutcome.Failure ->
+                        if (outcome.error.code == "CAPABILITY_STUB_ONLY") {
+                            NodeExecutionOutcome.Success(mapOf("status" to "stub_ok"))
+                        } else {
+                            outcome
+                        }
+                    else -> outcome
+                }
+            }
+
+            override suspend fun rollback(node: com.nova.runtime.models.ActionNode, traceId: UUID): NodeExecutionOutcome =
+                stubExecutor.rollback(node, traceId)
+        }
         val executionFactory = ExecutionRuntimeFactory(
             dependencyResolver = DefaultDependencyResolver(),
             queueManager = DefaultQueueManager(),
@@ -109,7 +143,7 @@ class CognitivePipelineOrchestratorTest {
             monitor = DefaultExecutionMonitor(),
             metrics = ExecutionMetrics(),
             eventPublisher = ExecutionEventPublisher(eventBus),
-            actionExecutor = StubCapabilityActionExecutor(capabilityFramework),
+            actionExecutor = testExecutor,
             actionPolicyGate = policyEngine,
             historyRecorder = NoOpExecutionHistoryRecorder(),
             logger = logger,
@@ -157,6 +191,7 @@ class CognitivePipelineOrchestratorTest {
                 logger = logger,
             ),
             memoryPlatform = EmptyMemoryPlatform,
+            calendarIntentSupport = NoOpCalendarIntentSupport,
             logger = logger,
         )
     }

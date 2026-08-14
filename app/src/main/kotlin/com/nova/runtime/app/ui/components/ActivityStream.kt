@@ -3,6 +3,7 @@ package com.nova.runtime.app.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -33,11 +34,17 @@ data class ActivityItem(
     val isAlert: Boolean = false,
     /** When set, later items with the same key replace this row in-place (live progress). */
     val replaceKey: String? = null,
+    val fullContent: String? = null,
+    val answerMode: String? = null,
+    val sourceFileName: String? = null,
+    val sourceModifiedAtMillis: Long? = null,
+    val expandable: Boolean = false,
 )
 
 @Composable
 fun ActivityStream(
     activities: List<ActivityItem>,
+    onExpandContent: (ContentDetailState) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -68,7 +75,10 @@ fun ActivityStream(
                         visible = true,
                         enter = fadeIn() + slideInVertically { it / 3 },
                     ) {
-                        ActivityCard(item = item)
+                        ActivityCard(
+                            item = item,
+                            onExpandContent = onExpandContent,
+                        )
                     }
                 }
             }
@@ -106,14 +116,39 @@ private fun EmptyActivityState(modifier: Modifier = Modifier) {
 @Composable
 private fun ActivityCard(
     item: ActivityItem,
+    onExpandContent: (ContentDetailState) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isExtract = item.answerMode == "extract"
+    val displayText = if (isExtract && !item.fullContent.isNullOrBlank()) {
+        item.fullContent
+    } else {
+        friendlyMessage(item.message)
+    }
+    val canExpand = item.expandable && !item.fullContent.isNullOrBlank()
+
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
             .background(NovaColors.glassSurface)
             .border(1.dp, NovaColors.glassBorder, MaterialTheme.shapes.large)
+            .then(
+                if (canExpand) {
+                    Modifier.clickable {
+                        onExpandContent(
+                            ContentDetailState(
+                                text = item.fullContent.orEmpty(),
+                                fileName = item.sourceFileName,
+                                modifiedAtMillis = item.sourceModifiedAtMillis,
+                                answerMode = item.answerMode,
+                            ),
+                        )
+                    }
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -134,16 +169,23 @@ private fun ActivityCard(
         }
 
         Text(
-            text = friendlyMessage(item.message),
+            text = displayText,
             style = MaterialTheme.typography.bodyMedium,
             color = if (item.isAlert || item.message.startsWith("FAILED", ignoreCase = true)) {
                 NovaColors.error
             } else {
                 NovaColors.textPrimary
             },
-            maxLines = 6,
+            maxLines = if (isExtract || canExpand) Int.MAX_VALUE else 6,
             overflow = TextOverflow.Ellipsis,
         )
+        if (canExpand && !isExtract) {
+            Text(
+                text = "Tap to view full content",
+                style = MaterialTheme.typography.labelSmall,
+                color = NovaColors.accent,
+            )
+        }
     }
 }
 

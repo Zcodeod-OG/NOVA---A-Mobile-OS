@@ -9,6 +9,7 @@ import com.nova.runtime.ai.native.extraction.AndroidDocumentTextExtractor
 import com.nova.runtime.ai.native.model.AndroidModelDownloadManager
 import com.nova.runtime.ai.model.OcrEngine
 import com.nova.runtime.ai.native.indexing.EmbeddingIndexer
+import com.nova.runtime.ai.native.indexing.MessageEmbeddingIndexer
 import com.nova.runtime.ai.native.ingestion.AndroidPhotoImageLoader
 import com.nova.runtime.ai.native.ingestion.PhotoImageLoader
 import com.nova.runtime.ai.native.inference.OnDeviceModelRegistryFactory
@@ -89,6 +90,13 @@ val aiNativeModule = module {
             embeddingRepository = get(),
             vectorIndex = get(),
             ocrEngine = get(),
+        )
+    }
+
+    single {
+        MessageEmbeddingIndexer(
+            messageRepository = get(),
+            embeddingIndexer = get(),
         )
     }
 }
