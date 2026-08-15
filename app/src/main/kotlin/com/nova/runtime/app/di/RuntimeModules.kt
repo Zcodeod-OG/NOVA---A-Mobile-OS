@@ -1,55 +1,61 @@
 package com.nova.runtime.app.di
 
-import com.nova.runtime.android.AndroidAdapterLayer
-import com.nova.runtime.android.AndroidAdapterLayerStub
-import com.nova.runtime.app.action.AndroidActionExecutor
-import com.nova.runtime.app.ui.NovaOsViewModel
-import com.nova.runtime.capability.CapabilityFramework
-import com.nova.runtime.capability.CapabilityFrameworkStub
-import com.nova.runtime.conversation.ConversationService
-import com.nova.runtime.conversation.ConversationServiceStub
+import com.nova.runtime.android.di.androidAdapterModule
+import com.nova.runtime.capability.di.capabilityModule
+import com.nova.runtime.app.conversation.SessionRepositoryPersistence
+import com.nova.runtime.conversation.di.conversationModule
+import com.nova.runtime.conversation.session.SessionPersistence
+import com.nova.runtime.app.execution.StorageExecutionHistoryRecorder
 import com.nova.runtime.execution.ExecutionRuntime
-import com.nova.runtime.execution.ExecutionRuntimeStub
-import com.nova.runtime.inference.AdaptiveInferenceEngine
-import com.nova.runtime.inference.OnnxInferenceEngine
+import com.nova.runtime.execution.di.executionModule
+import com.nova.runtime.execution.history.ExecutionHistoryRecorder
+import com.nova.runtime.inference.di.inferenceModule
 import com.nova.runtime.events.InMemoryEventBus
 import com.nova.runtime.kernel.RuntimeKernel
 import com.nova.runtime.kernel.di.kernelModule
 import com.nova.runtime.memory.MemoryPlatform
-import com.nova.runtime.memory.MemoryPlatformStub
-import com.nova.runtime.planner.PlanningService
-import com.nova.runtime.planner.PlanningServiceStub
-import com.nova.runtime.policy.PolicyEngine
-import com.nova.runtime.policy.PolicyEngineStub
-import com.nova.runtime.reasoning.ReasoningEngine
-import com.nova.runtime.reasoning.ReasoningEngineStub
-import com.nova.runtime.storage.coordinator.StorageCoordinator
-import com.nova.runtime.storage.coordinator.StorageCoordinatorStub
-import com.nova.runtime.understanding.SemanticUnderstandingPipeline
-import com.nova.runtime.understanding.SemanticUnderstandingPipelineStub
-import org.koin.android.ext.koin.androidContext
-import org.koin.androidx.viewmodel.dsl.viewModel
+import com.nova.runtime.app.memory.PreferenceMemoryPlatform
+import com.nova.runtime.planner.di.plannerModule
+import com.nova.runtime.policy.di.policyModule
+import com.nova.runtime.reasoning.di.reasoningModule
+import com.nova.runtime.storage.di.storageModule
+import com.nova.runtime.orchestrator.di.orchestratorModule
+import com.nova.runtime.understanding.di.understandingModule
 import org.koin.dsl.module
 
 /** Sprint 0 service stubs wired alongside Sprint 1 kernel infrastructure. */
 val sprint0StubsModule = module {
-    single<AdaptiveInferenceEngine> { OnnxInferenceEngine() }
-    single<SemanticUnderstandingPipeline> { SemanticUnderstandingPipelineStub(get()) }
-    single<StorageCoordinator> { StorageCoordinatorStub() }
-    single<MemoryPlatform> { MemoryPlatformStub(get()) }
-    single<ReasoningEngine> { ReasoningEngineStub() }
-    single<PlanningService> { PlanningServiceStub() }
-    single<PolicyEngine> { PolicyEngineStub() }
-    single<CapabilityFramework> { CapabilityFrameworkStub() }
-    single<ExecutionRuntime> { ExecutionRuntimeStub() }
-    single<ConversationService> { ConversationServiceStub() }
-    single<AndroidAdapterLayer> { AndroidAdapterLayerStub() }
-    single { AndroidActionExecutor(androidContext()) }
-    viewModel { NovaOsViewModel(get(), get()) }
+    single<MemoryPlatform> { PreferenceMemoryPlatform(get(), get(), get()) }
+}
+
+val conversationPersistenceModule = module {
+    single<SessionPersistence> { SessionRepositoryPersistence(get()) }
+}
+
+/** Overrides execution history persistence when storage module is available. */
+val executionPersistenceModule = module {
+    single<ExecutionHistoryRecorder> { StorageExecutionHistoryRecorder(get()) }
 }
 
 val runtimeModule = module {
-    includes(kernelModule, sprint0StubsModule)
+    includes(
+        kernelModule,
+        inferenceModule,
+        reasoningModule,
+        plannerModule,
+        policyModule,
+        capabilityModule,
+        androidAdapterModule,
+        // androidCapabilityModule is loaded as a top-level module in NovaApplication
+        // AFTER this module so its CapabilityRegistry override actually wins (Koin
+        // nested includes() do not reliably override sibling definitions).
+        executionModule,
+        sprint0StubsModule,
+        understandingModule,
+        conversationModule,
+        conversationPersistenceModule,
+        orchestratorModule,
+    )
     single {
         RuntimeKernel(
             serviceRegistry = get(),

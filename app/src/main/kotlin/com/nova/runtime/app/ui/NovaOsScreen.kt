@@ -1,274 +1,162 @@
 package com.nova.runtime.app.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.nova.runtime.app.ui.components.ActivityStream
 import com.nova.runtime.app.ui.components.AppGridSection
 import com.nova.runtime.app.ui.components.CommandBar
-import com.nova.runtime.app.ui.components.FloatingNovaVoiceWidget
-import com.nova.runtime.app.ui.components.MobileOsWidgets
+import com.nova.runtime.app.ui.components.ContentDetailSheet
+import com.nova.runtime.app.ui.components.ModelDownloadOverlay
 import com.nova.runtime.app.ui.components.SystemHeader
-import com.nova.runtime.app.ui.theme.NovaCyanAccent
-import com.nova.runtime.app.ui.theme.NovaDarkBackground
-import com.nova.runtime.app.ui.theme.NovaSurfaceDark
-import com.nova.runtime.app.ui.theme.NovaSurfaceVariant
-import com.nova.runtime.app.ui.theme.NovaTextPrimary
-import com.nova.runtime.app.ui.theme.NovaTextSecondary
-import com.nova.runtime.models.RuntimeLifecycleState
-
-data class CapabilityModule(
-    val title: String,
-    val description: String,
-    val isOnline: Boolean
-)
+import com.nova.runtime.app.ui.theme.NovaColors
+import com.nova.runtime.app.voice.VoiceCaptureController
+import com.nova.runtime.app.ui.onboarding.ProfileOnboardingScreen
+import com.nova.runtime.app.ui.onboarding.ProfileOnboardingViewModel
+import com.nova.runtime.ai.model.ModelDownloadPhase
+import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun NovaOsScreen(
     viewModel: NovaOsViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onboardingViewModel: ProfileOnboardingViewModel = koinViewModel(),
 ) {
     val lifecycleState by viewModel.lifecycleState.collectAsState()
-    val activityFeed by viewModel.activities.collectAsState()
+    val activityFeed by viewModel.activityFeed.collectAsState()
+    val isProcessing by viewModel.isProcessing.collectAsState()
+    val isRecordingVoice by viewModel.isRecordingVoice.collectAsState()
+    val voiceStatusMessage by viewModel.voiceStatusMessage.collectAsState()
+    val whisperAvailable by viewModel.whisperAvailable.collectAsState()
+    val modelDownloadState by viewModel.modelDownloadState.collectAsState()
+    val indexingStatus by viewModel.indexingStatus.collectAsState()
+    val contentDetail by viewModel.contentDetail.collectAsState()
+    val showOnboarding by onboardingViewModel.showOnboarding.collectAsState()
 
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val voiceCapture = remember(scope, viewModel) {
+        VoiceCaptureController(context, scope, viewModel)
+    }
 
-    val modules = remember {
-        listOf(
-            CapabilityModule("Kernel Engine", "Core lifecycle & event bus", true),
-            CapabilityModule("Cognitive Planner", "Task breakdown & routing", true),
-            CapabilityModule("Reasoning Matrix", "Context & decision engine", true),
-            CapabilityModule("Vector Memory", "Short-term & long-term store", true),
-            CapabilityModule("Local Inference", "GGML/ONNX quantized LLM", true),
-            CapabilityModule("Execution System", "Sandboxed action executor", true)
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            voiceCapture.onPermissionGranted(whisperAvailable)
+        } else {
+            viewModel.reportVoiceError("Microphone permission denied.")
+        }
+    }
+
+    fun toggleVoiceRecording() {
+        voiceCapture.toggle(
+            whisperAvailable = whisperAvailable,
+            isProcessing = isProcessing,
+            isRecordingVoice = isRecordingVoice,
+            hasRecordAudioPermission = VoiceCaptureController.hasRecordAudioPermission(context),
+            requestRecordAudioPermission = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
         )
     }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = NovaDarkBackground,
-        floatingActionButton = {
-            FloatingNovaVoiceWidget(
-                onVoiceCommandCaptured = { spokenCommand ->
-                    viewModel.submitCommand(spokenCommand)
-                }
-            )
-        },
-        bottomBar = {
-            Box(modifier = Modifier.padding(12.dp)) {
-                CommandBar(
-                    onCommandSubmit = { command ->
-                        viewModel.submitCommand(command)
-                    }
-                )
-            }
-        }
-    ) { paddingValues ->
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(ambientBackgroundBrush()),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp),
         ) {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // 1. Top System Telemetry Header (Dynamic Island)
-            SystemHeader(lifecycleState = lifecycleState ?: RuntimeLifecycleState.READY)
+            SystemHeader(
+                lifecycleState = lifecycleState,
+                indexingStatus = indexingStatus,
+            )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
-            // 2. Tab Selector Row (HOME OS vs COGNITION TELEMETRY)
-            TabRow(
-                selectedTabIndex = selectedTabIndex,
-                containerColor = NovaSurfaceDark,
-                contentColor = NovaCyanAccent,
-                indicator = { tabPositions ->
-                    TabRowDefaults.SecondaryIndicator(
-                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                        color = NovaCyanAccent
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .border(1.dp, NovaSurfaceVariant, RoundedCornerShape(14.dp))
+            CommandBar(
+                onCommandSubmit = viewModel::submitCommand,
+                onMicToggle = ::toggleVoiceRecording,
+                enabled = !isProcessing,
+                isRecording = isRecordingVoice,
+                voiceStatusMessage = voiceStatusMessage,
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            ModelDownloadOverlay(
+                session = modelDownloadState,
+                onRetry = viewModel::retryModelDownloads,
+            )
+
+            if (modelDownloadState.showOverlay ||
+                modelDownloadState.phase == ModelDownloadPhase.FAILED ||
+                modelDownloadState.phase == ModelDownloadPhase.OFFLINE
             ) {
-                Tab(
-                    selected = selectedTabIndex == 0,
-                    onClick = { selectedTabIndex = 0 },
-                    text = {
-                        Text(
-                            text = "📱 HOME OS",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (selectedTabIndex == 0) NovaCyanAccent else NovaTextSecondary
-                        )
-                    }
-                )
-                Tab(
-                    selected = selectedTabIndex == 1,
-                    onClick = { selectedTabIndex = 1 },
-                    text = {
-                        Text(
-                            text = "⚙️ TELEMETRY",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (selectedTabIndex == 1) NovaCyanAccent else NovaTextSecondary
-                        )
-                    }
-                )
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            ActivityStream(
+                activities = activityFeed,
+                onExpandContent = viewModel::showContentDetail,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(bottom = 16.dp),
+            )
+        }
 
-            // 3. Tab Content Switcher
-            when (selectedTabIndex) {
-                0 -> {
-                    // TAB 0: HOME MOBILE OS INTERFACE
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        // Weather & Music Widgets
-                        MobileOsWidgets(
-                            onPlayMusicClick = {
-                                viewModel.submitCommand("play lo-fi song on spotify")
-                            }
-                        )
+        ContentDetailSheet(
+            state = contentDetail,
+            onDismiss = viewModel::dismissContentDetail,
+        )
 
-                        // Interactive App Grid & Dock
-                        AppGridSection(
-                            onAppClick = { appName ->
-                                viewModel.submitCommand("open $appName")
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                1 -> {
-                    // TAB 1: COGNITIVE RUNTIME MODULES & TELEMETRY STREAM
-                    Column(
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = "COGNITIVE RUNTIME MODULES (TAP TO INSPECT)",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = NovaTextSecondary,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
-                        )
-
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            contentPadding = PaddingValues(bottom = 8.dp),
-                            modifier = Modifier.height(170.dp)
-                        ) {
-                            items(modules) { module ->
-                                ModuleCard(
-                                    module = module,
-                                    onCardClick = { viewModel.inspectModule(module.title) }
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        ActivityStream(
-                            activities = activityFeed,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
+        if (showOnboarding) {
+            ProfileOnboardingScreen(viewModel = onboardingViewModel)
         }
     }
 }
 
 @Composable
-fun ModuleCard(
-    module: CapabilityModule,
-    onCardClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(NovaSurfaceDark)
-            .border(1.dp, NovaSurfaceVariant, RoundedCornerShape(12.dp))
-            .clickable { onCardClick() }
-            .padding(10.dp)
-    ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = module.title,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = NovaTextPrimary
-                )
-
-                Text(
-                    text = if (module.isOnline) "● ACTIVE" else "○ IDLE",
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (module.isOnline) NovaCyanAccent else NovaTextSecondary,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = module.description,
-                fontSize = 10.sp,
-                color = NovaTextSecondary,
-                maxLines = 2
-            )
-        }
+private fun ambientBackgroundBrush(): Brush {
+    val dark = isSystemInDarkTheme()
+    return if (dark) {
+        Brush.verticalGradient(
+            colors = listOf(
+                NovaColors.background,
+                NovaColors.surface.copy(alpha = 0.95f),
+                NovaColors.background,
+            ),
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                NovaColors.background,
+                NovaColors.accent.copy(alpha = 0.04f),
+                NovaColors.background,
+            ),
+        )
     }
 }

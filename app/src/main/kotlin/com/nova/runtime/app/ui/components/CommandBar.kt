@@ -7,8 +7,9 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,13 +17,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,129 +32,141 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.nova.runtime.app.ui.theme.NovaCyanAccent
-import com.nova.runtime.app.ui.theme.NovaIndigoAccent
-import com.nova.runtime.app.ui.theme.NovaSurfaceDark
-import com.nova.runtime.app.ui.theme.NovaSurfaceVariant
-import com.nova.runtime.app.ui.theme.NovaTextPrimary
-import com.nova.runtime.app.ui.theme.NovaTextSecondary
-import java.util.Locale
+import com.nova.runtime.app.ui.theme.NovaColors
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
 
 @Composable
 fun CommandBar(
     onCommandSubmit: (String) -> Unit,
-    modifier: Modifier = Modifier
+    onMicToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    isRecording: Boolean = false,
+    voiceStatusMessage: String? = null,
 ) {
     val context = LocalContext.current
     var queryText by remember { mutableStateOf("") }
 
-    val handleSubmit = {
-        if (queryText.isNotBlank()) {
-            onCommandSubmit(queryText.trim())
+    fun submit() {
+        val trimmed = queryText.trim()
+        if (trimmed.isNotBlank() && enabled && !isRecording) {
+            onCommandSubmit(trimmed)
             queryText = ""
         }
     }
 
-    // Android Voice Recognition Speech-to-Text Launcher
-    val speechLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val spokenText = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-            if (!spokenText.isNullOrBlank()) {
-                queryText = spokenText
-                onCommandSubmit(spokenText)
-                queryText = ""
-            }
-        }
-    }
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Voice Input Mic Button
+    Column(modifier = modifier) {
         Box(
             modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(NovaIndigoAccent.copy(alpha = 0.8f))
-                .clickable {
-                    try {
-                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak a command to NOVA...")
-                        }
-                        speechLauncher.launch(intent)
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "Voice Recognition not available on device", Toast.LENGTH_SHORT).show()
-                    }
-                },
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .shadow(
+                    elevation = 24.dp,
+                    shape = MaterialTheme.shapes.extraLarge,
+                    ambientColor = NovaColors.accent.copy(alpha = 0.08f),
+                    spotColor = NovaColors.accent.copy(alpha = 0.12f),
+                )
+                .clip(MaterialTheme.shapes.extraLarge)
+                .background(NovaColors.glassSurface)
+                .border(1.dp, NovaColors.glassBorder, MaterialTheme.shapes.extraLarge)
+                .padding(horizontal = 8.dp, vertical = 8.dp),
         ) {
-            Text(
-                text = "🎤",
-                fontSize = 18.sp
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(
+                    onClick = onMicToggle,
+                    enabled = enabled,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isRecording) {
+                                NovaColors.error.copy(alpha = 0.15f)
+                            } else {
+                                NovaColors.surfaceElevated.copy(alpha = 0.6f)
+                            },
+                        ),
+                ) {
+                    Icon(
+                        imageVector = if (isRecording) Icons.Filled.Stop else Icons.Filled.Mic,
+                        contentDescription = if (isRecording) "Stop recording" else "Start voice input",
+                        tint = if (isRecording) NovaColors.error else NovaColors.accent,
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                BasicTextField(
+                    value = queryText,
+                    onValueChange = { queryText = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 10.dp),
+                    enabled = enabled && !isRecording,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = NovaColors.textPrimary),
+                    cursorBrush = SolidColor(NovaColors.accent),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { submit() }),
+                    decorationBox = { innerTextField ->
+                        if (queryText.isEmpty()) {
+                            Text(
+                                text = if (isRecording) {
+                                    "Listening…"
+                                } else {
+                                    "Ask NOVA anything"
+                                },
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = NovaColors.textSecondary,
+                            )
+                        }
+                        innerTextField()
+                    },
+                )
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                IconButton(
+                    onClick = ::submit,
+                    enabled = queryText.isNotBlank() && enabled && !isRecording,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (queryText.isNotBlank() && enabled && !isRecording) {
+                                NovaColors.accent
+                            } else {
+                                NovaColors.surfaceElevated.copy(alpha = 0.4f)
+                            },
+                        ),
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "Send",
+                        tint = if (queryText.isNotBlank() && enabled && !isRecording) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            NovaColors.textSecondary
+                        },
+                    )
+                }
+            }
         }
 
-        Spacer(modifier = Modifier.width(8.dp))
-
-        OutlinedTextField(
-            value = queryText,
-            onValueChange = { queryText = it },
-            modifier = Modifier.weight(1f),
-            placeholder = {
-                Text(
-                    text = "Ask NOVA or speak command...",
-                    color = NovaTextSecondary,
-                    fontSize = 13.sp
-                )
-            },
-            singleLine = true,
-            textStyle = TextStyle(
-                color = NovaTextPrimary,
-                fontSize = 14.sp
-            ),
-            shape = RoundedCornerShape(24.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = NovaSurfaceDark,
-                unfocusedContainerColor = NovaSurfaceDark,
-                focusedBorderColor = NovaCyanAccent,
-                unfocusedBorderColor = NovaSurfaceVariant,
-                focusedTextColor = NovaTextPrimary,
-                unfocusedTextColor = NovaTextPrimary,
-                cursorColor = NovaCyanAccent
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = { handleSubmit() })
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        Button(
-            onClick = { handleSubmit() },
-            shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = NovaCyanAccent,
-                disabledContainerColor = NovaSurfaceVariant
-            ),
-            enabled = queryText.isNotBlank()
-        ) {
+        voiceStatusMessage?.takeIf { it.isNotBlank() }?.let { message ->
             Text(
-                text = "EXECUTE",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (queryText.isNotBlank()) NovaSurfaceDark else NovaTextSecondary
+                text = message,
+                style = MaterialTheme.typography.labelMedium,
+                color = NovaColors.textSecondary,
+                modifier = Modifier.padding(start = 16.dp, top = 8.dp),
             )
         }
     }

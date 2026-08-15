@@ -1,109 +1,249 @@
 package com.nova.runtime.app.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.nova.runtime.app.ui.theme.NovaCyanAccent
-import com.nova.runtime.app.ui.theme.NovaIndigoAccent
-import com.nova.runtime.app.ui.theme.NovaSurfaceDark
-import com.nova.runtime.app.ui.theme.NovaSurfaceVariant
-import com.nova.runtime.app.ui.theme.NovaTextPrimary
-import com.nova.runtime.app.ui.theme.NovaTextSecondary
+import com.nova.runtime.app.ui.theme.NovaColors
 
 data class ActivityItem(
     val timestamp: String,
     val source: String,
     val message: String,
-    val isAlert: Boolean = false
+    val isAlert: Boolean = false,
+    /** When set, later items with the same key replace this row in-place (live progress). */
+    val replaceKey: String? = null,
+    val fullContent: String? = null,
+    val answerMode: String? = null,
+    val sourceFileName: String? = null,
+    val sourceModifiedAtMillis: Long? = null,
+    val expandable: Boolean = false,
 )
 
 @Composable
 fun ActivityStream(
     activities: List<ActivityItem>,
-    modifier: Modifier = Modifier
+    onExpandContent: (ContentDetailState) -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
-    val listState = rememberLazyListState()
-
-    LaunchedEffect(activities.size) {
-        if (activities.isNotEmpty()) {
-            listState.animateScrollToItem(0)
-        }
-    }
-
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Text(
-            text = "LIVE EVENT & COGNITION STREAM (${activities.size} EVENTS)",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = NovaTextSecondary,
-            fontFamily = FontFamily.Monospace,
-            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
+            text = "Recent",
+            style = MaterialTheme.typography.titleMedium,
+            color = NovaColors.textPrimary,
+            modifier = Modifier.padding(start = 4.dp),
         )
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(220.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(NovaSurfaceDark)
-                .border(1.dp, NovaSurfaceVariant, RoundedCornerShape(14.dp))
-                .padding(12.dp)
-        ) {
+        if (activities.isEmpty()) {
+            EmptyActivityState(modifier = Modifier.weight(1f))
+        } else {
             LazyColumn(
-                state = listState,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                items(activities) { item ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top
+                items(
+                    items = activities,
+                    key = { item -> item.replaceKey ?: "${item.timestamp}-${item.source}-${item.message}" },
+                ) { item ->
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn() + slideInVertically { it / 3 },
                     ) {
-                        Text(
-                            text = "[${item.timestamp}]",
-                            fontSize = 11.sp,
-                            color = NovaTextSecondary,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.width(68.dp)
-                        )
-
-                        Text(
-                            text = "${item.source}:",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (item.isAlert) NovaCyanAccent else NovaIndigoAccent,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.width(92.dp)
-                        )
-
-                        Text(
-                            text = item.message,
-                            fontSize = 12.sp,
-                            color = NovaTextPrimary
+                        ActivityCard(
+                            item = item,
+                            onExpandContent = onExpandContent,
                         )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyActivityState(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
+            .background(NovaColors.glassSurface)
+            .border(1.dp, NovaColors.glassBorder, MaterialTheme.shapes.large)
+            .padding(32.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "Nothing here yet",
+                style = MaterialTheme.typography.titleMedium,
+                color = NovaColors.textPrimary,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Ask a question or give a command to get started.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = NovaColors.textSecondary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActivityCard(
+    item: ActivityItem,
+    onExpandContent: (ContentDetailState) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isExtract = item.answerMode == "extract"
+    val displayText = if (isExtract && !item.fullContent.isNullOrBlank()) {
+        item.fullContent
+    } else {
+        friendlyMessage(item.message)
+    }
+    val canExpand = item.expandable && !item.fullContent.isNullOrBlank()
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
+            .background(NovaColors.glassSurface)
+            .border(1.dp, NovaColors.glassBorder, MaterialTheme.shapes.large)
+            .then(
+                if (canExpand) {
+                    Modifier.clickable {
+                        onExpandContent(
+                            ContentDetailState(
+                                text = item.fullContent.orEmpty(),
+                                fileName = item.sourceFileName,
+                                modifiedAtMillis = item.sourceModifiedAtMillis,
+                                answerMode = item.answerMode,
+                            ),
+                        )
+                    }
+                } else {
+                    Modifier
+                },
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SourceLabel(
+                source = item.source,
+                isAlert = item.isAlert,
+            )
+            Text(
+                text = item.timestamp,
+                style = MaterialTheme.typography.labelSmall,
+                color = NovaColors.textSecondary,
+            )
+        }
+
+        Text(
+            text = displayText,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (item.isAlert || item.message.startsWith("FAILED", ignoreCase = true)) {
+                NovaColors.error
+            } else {
+                NovaColors.textPrimary
+            },
+            maxLines = if (isExtract || canExpand) Int.MAX_VALUE else 6,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (canExpand && !isExtract) {
+            Text(
+                text = "Tap to view full content",
+                style = MaterialTheme.typography.labelSmall,
+                color = NovaColors.accent,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SourceLabel(
+    source: String,
+    isAlert: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val label = friendlySource(source)
+    val tint = when {
+        isAlert -> NovaColors.error
+        label.equals("Answer", ignoreCase = true) -> NovaColors.success
+        else -> NovaColors.accent
+    }
+
+    Box(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(tint.copy(alpha = 0.12f))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = tint,
+        )
+    }
+}
+
+private fun friendlySource(source: String): String = when (source.uppercase()) {
+    "KERNEL" -> "System"
+    "SUP", "UNDERSTANDING" -> "Understanding"
+    "REASONING" -> "Reasoning"
+    "PLANNER" -> "Planning"
+    "EXECUTION" -> "Actions"
+    "STORAGE" -> "Library"
+    "CAPABILITY" -> "Answer"
+    "INFERENCE" -> "Assistant"
+    else -> source.replace('_', ' ').lowercase().replaceFirstChar { it.titlecase() }
+}
+
+private fun friendlyMessage(message: String): String {
+    val trimmed = message.trim()
+    return when {
+        trimmed.startsWith("FAILED:", ignoreCase = true) ->
+            trimmed.removePrefix("FAILED:").removePrefix("failed:").trim()
+        trimmed.contains("NIR generated", ignoreCase = true) ->
+            "Understood your request"
+        trimmed.contains("Action graph built", ignoreCase = true) ->
+            "Plan ready"
+        trimmed.contains("Graph execution completed", ignoreCase = true) ->
+            "Done"
+        trimmed.contains("Runtime lifecycle transitioned to READY", ignoreCase = true) ->
+            "NOVA is ready"
+        trimmed.contains("Runtime modules initializing", ignoreCase = true) ->
+            "Starting NOVA…"
+        else -> trimmed
     }
 }

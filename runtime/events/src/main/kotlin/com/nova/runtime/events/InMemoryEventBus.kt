@@ -79,6 +79,7 @@ class InMemoryEventBus(
         isShutdown.set(true)
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun dispatchEvent(event: RuntimeEvent) {
         val matching = subscribers.values
             .filter { subscriber -> subscriber.eventTypes.isEmpty() || event.eventType in subscriber.eventTypes }

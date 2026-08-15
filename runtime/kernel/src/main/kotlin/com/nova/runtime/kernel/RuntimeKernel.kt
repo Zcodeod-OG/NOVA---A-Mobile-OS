@@ -4,6 +4,8 @@ import com.nova.runtime.events.InMemoryEventBus
 import com.nova.runtime.kernel.api.RuntimeModuleDescriptor
 import com.nova.runtime.kernel.config.ConfigurationManager
 import com.nova.runtime.kernel.config.InMemoryConfigurationManager
+import com.nova.runtime.kernel.config.ConfigurationValidator
+import com.nova.runtime.kernel.config.DefaultConfigurationValidator
 import com.nova.runtime.kernel.config.KernelConfigKeys
 import com.nova.runtime.kernel.lifecycle.DefaultLifecycleManager
 import com.nova.runtime.kernel.lifecycle.LifecycleManager
@@ -14,7 +16,6 @@ import com.nova.runtime.kernel.registry.DefaultServiceRegistry
 import com.nova.runtime.kernel.registry.ServiceRegistry
 import com.nova.runtime.kernel.trace.DefaultTraceIdGenerator
 import com.nova.runtime.kernel.trace.TraceContextHolder
-import com.nova.runtime.kernel.trace.TraceIdGenerator
 import com.nova.runtime.utils.logging.LogLevel
 import com.nova.runtime.utils.logging.NovaLogger
 import com.nova.runtime.utils.logging.StructuredLogger
@@ -23,6 +24,7 @@ import java.util.UUID
 /**
  * Facade for runtime kernel bootstrap and shutdown.
  */
+@Suppress("LongParameterList")
 class RuntimeKernel(
     val serviceRegistry: ServiceRegistry,
     val eventBus: InMemoryEventBus,
@@ -31,6 +33,7 @@ class RuntimeKernel(
     val moduleRegistry: ModuleRegistry,
     val traceContextHolder: TraceContextHolder,
     val logger: NovaLogger,
+    private val configurationValidator: ConfigurationValidator = DefaultConfigurationValidator(),
 ) {
     suspend fun bootstrap(
         modules: List<RuntimeModuleDescriptor> = emptyList(),
@@ -38,6 +41,7 @@ class RuntimeKernel(
         traceId: UUID = UUID.randomUUID(),
     ) {
         configuration.forEach { (key, value) -> configurationManager.set(key, value) }
+        validateConfiguration()
         modules.forEach { moduleRegistry.register(it) }
 
         val context = DefaultModuleRegistrationContext(serviceRegistry, eventBus, logger)
@@ -52,6 +56,13 @@ class RuntimeKernel(
     suspend fun shutdown(traceId: UUID = UUID.randomUUID()) {
         lifecycleManager.stop(traceId)
         eventBus.shutdown()
+    }
+
+    private fun validateConfiguration() {
+        val errors = configurationValidator.validate(configurationManager.snapshot())
+        if (errors.isNotEmpty()) {
+            throw com.nova.runtime.error.NovaException(errors.first())
+        }
     }
 
     companion object {

@@ -24,3 +24,7 @@ captures/
 
 # Room schemas
 runtime/storage/schemas/
+
+# Local ONNX export artifacts (use assets or download flow)
+/embedding-mini.onnx
+/minilm-onnx-export/

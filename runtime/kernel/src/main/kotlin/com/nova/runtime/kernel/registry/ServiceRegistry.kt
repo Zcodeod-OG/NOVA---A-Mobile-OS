@@ -7,10 +7,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.reflect.KClass
 
-fun interface ServiceRegistrationListener {
-    fun onRegistered(serviceType: KClass<out NovaService>, instance: NovaService)
-}
-
 @Suppress("TooManyFunctions")
 interface ServiceRegistry {
     fun addRegistrationListener(listener: ServiceRegistrationListener)

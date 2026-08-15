@@ -9,6 +9,7 @@ kotlin {
 dependencies {
     implementation(project(":runtime:models"))
     implementation(libs.kotlin.stdlib)
+    implementation(project(":runtime:models"))
 
     testImplementation(libs.kotlin.test.junit)
 }

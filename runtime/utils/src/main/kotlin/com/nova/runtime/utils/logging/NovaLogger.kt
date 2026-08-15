@@ -24,11 +24,44 @@ data class LogEntry(
 )
 
 interface NovaLogger {
-    fun trace(module: String, message: String, traceId: UUID? = null, metadata: Map<String, String> = emptyMap())
-    fun debug(module: String, message: String, traceId: UUID? = null, metadata: Map<String, String> = emptyMap())
-    fun info(module: String, message: String, traceId: UUID? = null, durationMs: Long? = null, metadata: Map<String, String> = emptyMap())
-    fun warn(module: String, message: String, traceId: UUID? = null, throwable: Throwable? = null, metadata: Map<String, String> = emptyMap())
-    fun error(module: String, message: String, traceId: UUID? = null, throwable: Throwable? = null, metadata: Map<String, String> = emptyMap())
+    fun trace(
+        module: String,
+        message: String,
+        traceId: UUID? = null,
+        metadata: Map<String, String> = emptyMap(),
+    )
+
+    fun debug(
+        module: String,
+        message: String,
+        traceId: UUID? = null,
+        metadata: Map<String, String> = emptyMap(),
+    )
+
+    fun info(
+        module: String,
+        message: String,
+        traceId: UUID? = null,
+        durationMs: Long? = null,
+        metadata: Map<String, String> = emptyMap(),
+    )
+
+    fun warn(
+        module: String,
+        message: String,
+        traceId: UUID? = null,
+        throwable: Throwable? = null,
+        metadata: Map<String, String> = emptyMap(),
+    )
+
+    fun error(
+        module: String,
+        message: String,
+        traceId: UUID? = null,
+        throwable: Throwable? = null,
+        metadata: Map<String, String> = emptyMap(),
+    )
+
     fun entries(): List<LogEntry>
 }
 

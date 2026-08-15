@@ -1,5 +1,7 @@
 package com.nova.runtime.kernel.trace
 
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -34,6 +36,17 @@ class TraceContextTest {
                 assertEquals(inner, holder.current())
             }
             assertEquals(outer, holder.current())
+        }
+        assertNull(holder.current())
+    }
+
+    @Test
+    fun contextElement_propagatesTraceAcrossCoroutines() = runTest {
+        val holder = TraceContextHolder()
+        val context = TraceContext.newRoot()
+
+        withContext(holder.contextElement(context)) {
+            assertEquals(context, holder.current())
         }
         assertNull(holder.current())
     }

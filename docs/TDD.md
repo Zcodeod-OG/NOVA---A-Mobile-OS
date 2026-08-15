@@ -8,6 +8,12 @@
 
 **Purpose:** This document is the single source of truth for the NOVA engineering team. It consolidates all architectural decisions into one coherent design and replaces earlier draft sections.
 
+**Related Docs:**
+
+* [PRD §14 Implementation Status](./PRD.md#14-implementation-status) — G2 gaps and product alignment
+* [DPS §7–10](./DPS.md#7-vector-index) — vector index scale, indexing pipeline, WorkManager workers
+* [AIS §4.9](./AIS.md#49-model-asset-delivery) — model delivery, Whisper default, Play Asset Delivery
+
 ---
 
 # 1. System Vision
@@ -453,13 +459,16 @@ Android OS
 * ONNX Runtime
 * llama.cpp
 * MediaPipe (where useful)
-* Whisper.cpp (or equivalent offline ASR)
-* Small embedding model
+* Whisper ONNX (`whisper-tiny.onnx`) — **default offline ASR** (see [AIS §4.9](./AIS.md#49-model-asset-delivery))
+* `all-MiniLM-L6-v2` embedding model (384-dim) — see §22
+* Real WordPiece tokenizer (MiniLM vocabulary) — see §22.2
+* Multimodal image embedding model — see §22.3 (**in progress**)
 
 ### Search
 
 * SQLite + Room
-* HNSW vector index
+* HNSW vector index at production scale ([DPS §7.1](./DPS.md#71-scale--index-structure))
+* Brute-force cosine KNN at MVP scale
 * Knowledge Graph layer
 
 ### Runtime
@@ -484,3 +493,91 @@ Android OS
 > **The Runtime is the product.**
 
 The AI model, Android integrations, and applications are replaceable components. The runtime architecture, deterministic execution pipeline, and capability abstraction are the enduring core of NOVA.
+
+Product differentiation: **"Android manages apps. NOVA manages intentions."** That requires local indexing ([DPS §9](./DPS.md#9-file-indexing-pipeline)) and local models (§22) — not cloud-assistant routing.
+
+---
+
+# 22. Model & Tokenizer Pipeline
+
+This section defines the on-device inference stack required to meet [PRD G2](./PRD.md#14-implementation-status). All models run locally via ONNX Runtime; no user data is sent to cloud inference.
+
+## 22.1 Model Registry
+
+| Model | File | Tier | Purpose | Status |
+| ----- | ---- | ---- | ------- | ------ |
+| Embeddings | `embedding-mini.onnx` | Required | Text semantic search | **Shipped** (tokenizer upgrade **in progress**) |
+| ASR | `whisper-tiny.onnx` | Required | Offline voice input | **Shipped** |
+| LLM Light | `llm-light.onnx` | Required | Intent / planning assist | **Shipped** |
+| LLM Full | `llm-full.onnx` | Optional | Complex reasoning | **Shipped** |
+| Image embeddings | `embedding-vision.onnx` | Required (G2) | Photo semantic search | **Planned** |
+
+Model delivery: [AIS §4.9](./AIS.md#49-model-asset-delivery) (first-run download, Play Asset Delivery).
+
+## 22.2 Text Embeddings — MiniLM Tokenizer
+
+Production embeddings use **`all-MiniLM-L6-v2`** exported to ONNX (384 dimensions, version `all-MiniLM-L6-v2-onnx`).
+
+### Tokenizer Requirements
+
+The production path uses the model's **real WordPiece tokenizer**:
+
+* Vocabulary file bundled in app assets (`tokenizer/vocab.txt` + `tokenizer.json`)
+* `AutoTokenizer`-compatible tokenization: lowercasing, `[CLS]` / `[SEP]` wrapping, max length 256
+* Output: `input_ids`, `attention_mask`, `token_type_ids` tensors fed to ONNX session
+
+### Unacceptable Production Paths
+
+The following exist today for **development and CI only** and must **not** ship as production behavior:
+
+| Fallback | Identifier | Acceptable Use |
+| -------- | ---------- | -------------- |
+| Hash embedding generator | `hash-fallback-v1` | Unit tests, CI without ONNX assets |
+| Whitespace + `hashCode()` tokenizer | `OnnxSessionManager` dev path | Local dev before tokenizer merge |
+| Platform speech recognizer | `AndroidSpeechRecognizerClient` | Dev builds missing Whisper ONNX |
+
+**Hash-based embeddings are not a production substitute for MiniLM.** Semantic search accuracy targets ([PRD §4](./PRD.md#4-success-metrics)) cannot be met with deterministic hash vectors.
+
+## 22.3 Multimodal Embeddings
+
+Photo and image search requires embeddings beyond OCR text alone.
+
+| Content Type | Pipeline | Status |
+| ------------ | -------- | ------ |
+| Text / PDF / DOCX | MiniLM text embedding (§22.2) | **In progress** (tokenizer) |
+| Image (photo) | Vision encoder ONNX → 384-dim vector | **Planned** |
+| Image (fallback) | OCR text → MiniLM text embedding | **Shipped** (interim) |
+| Audio | Whisper transcript → MiniLM text embedding | **Planned** |
+
+Multimodal vectors share the same vector index ([DPS §7](./DPS.md#7-vector-index)) with a `content_type` metadata filter for hybrid search.
+
+## 22.4 Production Requirements
+
+Before G2 exit ([PRD §14](./PRD.md#14-implementation-status)):
+
+1. **Required models present** — `embedding-mini.onnx` and `whisper-tiny.onnx` downloaded or delivered via PAD before feature enablement.
+2. **Real tokenizer** — WordPiece vocabulary; no hash-based token IDs in inference path.
+3. **No silent degradation** — If a required model is missing, disable the feature and prompt download; do not fall back to hash embeddings or cloud ASR in production builds.
+4. **Version pinning** — `ModelAssetPaths.EMBEDDING_MODEL_VERSION` must match the bundled tokenizer and ONNX export.
+
+## 22.5 Inference Flow
+
+```text
+User query (text or voice→Whisper)
+        │
+        ▼
+MiniLM Tokenizer (§22.2)
+        │
+        ▼
+OnnxEmbeddingGenerator → 384-dim vector
+        │
+        ▼
+Vector Index k-NN (DPS §7)
+        │
+        ▼
+Ranked results → Reasoning Engine
+```
+
+Voice path: [AIS §4.9](./AIS.md#local-whisper-as-default-asr) — Whisper ONNX is the default; platform recognizer is dev-only.
+
+---

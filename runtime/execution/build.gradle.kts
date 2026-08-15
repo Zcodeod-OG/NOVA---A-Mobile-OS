@@ -9,6 +9,17 @@ kotlin {
 dependencies {
     implementation(libs.kotlin.stdlib)
     implementation(project(":runtime:models"))
+    implementation(project(":runtime:events"))
+    implementation(project(":runtime:utils"))
+    implementation(project(":runtime:capability"))
+    implementation(project(":runtime:policy"))
+    implementation(libs.koin.core)
     implementation(libs.kotlinx.coroutines.core)
-    testImplementation(libs.junit)
+
+    testImplementation(libs.kotlin.test.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }

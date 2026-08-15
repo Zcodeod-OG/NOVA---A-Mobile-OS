@@ -1,6 +1,6 @@
 package com.nova.runtime.events.memory
 
-object MemoryEventTypes {
+object MemoryEvents {
     const val RETRIEVED = "MemoryRetrieved"
     const val STORED = "MemoryStored"
 }

@@ -12,9 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,14 +24,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.nova.runtime.app.ui.theme.NovaCyanAccent
-import com.nova.runtime.app.ui.theme.NovaTextPrimary
-import com.nova.runtime.app.ui.theme.NovaTextSecondary
+import com.nova.runtime.app.ui.theme.NovaColors
 import com.nova.runtime.models.RuntimeLifecycleState
 import kotlinx.coroutines.delay
 import java.time.LocalTime
@@ -41,78 +35,133 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun SystemHeader(
     lifecycleState: RuntimeLifecycleState,
-    modifier: Modifier = Modifier
+    indexingStatus: String? = null,
+    modifier: Modifier = Modifier,
 ) {
-    var currentTimeString by remember { mutableStateOf("09:41") }
+    var currentTime by remember { mutableStateOf(formatClockTime()) }
 
     LaunchedEffect(Unit) {
-        val formatter = DateTimeFormatter.ofPattern("HH:mm")
         while (true) {
-            currentTimeString = LocalTime.now().format(formatter)
-            delay(1000)
+            currentTime = formatClockTime()
+            delay(30_000L)
         }
     }
 
-    val stateColor by animateColorAsState(
-        targetValue = when (lifecycleState) {
-            RuntimeLifecycleState.READY -> NovaCyanAccent
-            RuntimeLifecycleState.INITIALIZING, RuntimeLifecycleState.CREATED -> Color(0xFFF59E0B)
-            else -> Color(0xFFEF4444)
-        },
-        label = "StateColor"
-    )
-
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = currentTimeString,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = NovaTextPrimary
+                text = currentTime,
+                style = MaterialTheme.typography.headlineMedium,
+                color = NovaColors.textPrimary,
             )
 
-            // Dynamic Island Pill
-            Box(
-                modifier = Modifier
-                    .width(110.dp)
-                    .height(24.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.Black)
-                    .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(stateColor)
-                    )
-                    Text(
-                        text = "NOVA OS",
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-            }
-
             Text(
-                text = "100% 🔋",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = NovaTextSecondary
+                text = "NOVA",
+                style = MaterialTheme.typography.labelMedium,
+                color = NovaColors.textSecondary,
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StatusPill(
+                label = lifecycleLabel(lifecycleState),
+                accentColor = lifecycleAccent(lifecycleState),
+                showDot = true,
+            )
+
+            if (!indexingStatus.isNullOrBlank()) {
+                StatusPill(
+                    label = friendlyIndexingStatus(indexingStatus),
+                    accentColor = indexingAccent(indexingStatus),
+                    showDot = false,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusPill(
+    label: String,
+    accentColor: androidx.compose.ui.graphics.Color,
+    showDot: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.large)
+            .background(NovaColors.glassSurface)
+            .border(1.dp, NovaColors.glassBorder, MaterialTheme.shapes.large)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (showDot) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(accentColor),
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = accentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
+}
+
+private fun formatClockTime(): String =
+    LocalTime.now().format(DateTimeFormatter.ofPattern("h:mm"))
+
+private fun lifecycleLabel(state: RuntimeLifecycleState): String = when (state) {
+    RuntimeLifecycleState.READY -> "Ready"
+    RuntimeLifecycleState.INITIALIZING -> "Starting up"
+    RuntimeLifecycleState.CREATED -> "Starting up"
+    RuntimeLifecycleState.STOPPING -> "Shutting down"
+    RuntimeLifecycleState.STOPPED -> "Offline"
+}
+
+@Composable
+private fun lifecycleAccent(state: RuntimeLifecycleState): androidx.compose.ui.graphics.Color = when (state) {
+    RuntimeLifecycleState.READY -> NovaColors.success
+    RuntimeLifecycleState.STOPPING, RuntimeLifecycleState.STOPPED -> NovaColors.textSecondary
+    else -> NovaColors.accent
+}
+
+private fun friendlyIndexingStatus(status: String): String {
+    val trimmed = status.trim()
+    return when {
+        trimmed.equals("Ready", ignoreCase = true) -> "Library ready"
+        trimmed.equals("Index ready", ignoreCase = true) -> "Library ready"
+        trimmed.contains("indexed", ignoreCase = true) -> "Library synced"
+        trimmed.contains("Indexing", ignoreCase = true) -> "Syncing library"
+        trimmed.length > 28 -> trimmed.take(25) + "…"
+        else -> trimmed
+    }
+}
+
+@Composable
+private fun indexingAccent(status: String): androidx.compose.ui.graphics.Color {
+    val ready = status.equals("Ready", ignoreCase = true) ||
+        status.equals("Index ready", ignoreCase = true) ||
+        status.contains("indexed", ignoreCase = true)
+    return if (ready) NovaColors.success else NovaColors.accent
 }
