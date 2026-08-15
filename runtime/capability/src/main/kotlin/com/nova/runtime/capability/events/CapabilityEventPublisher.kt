@@ -76,6 +76,10 @@ class CapabilityEventPublisher(
         capabilityType: String,
         errorCode: String,
         providerId: String? = null,
+        userVisibleMessage: String? = null,
+        operation: String? = null,
+        reason: String? = null,
+        diagnostics: Map<String, String>? = null,
     ) {
         publish(
             eventType = CapabilityEvents.FAILED,
@@ -84,6 +88,12 @@ class CapabilityEventPublisher(
                 put("capabilityType", capabilityType)
                 put("errorCode", errorCode)
                 providerId?.let { put("providerId", it) }
+                operation?.let { put("operation", it) }
+                userVisibleMessage?.takeIf { it.isNotBlank() }?.let { put("userVisibleMessage", it) }
+                reason?.takeIf { it.isNotBlank() }?.let { put("reason", it) }
+                diagnostics?.forEach { (k, v) ->
+                    if (k.isNotBlank() && v.isNotBlank()) put("diag_$k", v)
+                }
             },
             priority = EventPriority.HIGH,
         )

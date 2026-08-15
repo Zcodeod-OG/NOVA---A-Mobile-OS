@@ -238,6 +238,22 @@ class PlaceholderIntentClassifier : IntentClassifier {
         )
 
         private val INTENT_PATTERNS = listOf(
+            // Dedicated Phone Call pattern ("call Atharv", "make a call to Mom", "phone call 9876543210")
+            IntentPattern("make_phone_call") { payload ->
+                !payload.contains("remind") &&
+                    !payload.contains("reminder") &&
+                    (
+                        PHONE_CALL_REGEX.containsMatchIn(payload) ||
+                            (
+                                listOf("call", "dial").any { it in payload } &&
+                                    !payload.contains("whatsapp") &&
+                                    !payload.contains("video call") &&
+                                    !payload.contains("message") &&
+                                    !payload.contains("text") &&
+                                    !payload.contains("send")
+                                )
+                        )
+            },
             // Document/file → WhatsApp (channel optional; WhatsApp is the default when a recipient is present).
             // Question forms ("tell me…", "from X show…") stay in-app via document_question.
             IntentPattern("send_document_whatsapp") { payload ->
@@ -345,6 +361,11 @@ class PlaceholderIntentClassifier : IntentClassifier {
             },
         )
 
+        private val PHONE_CALL_REGEX = Regex(
+            """\b(?:call|make\s+a?\s*call(?:\s+to)?|phone(?:\s+call)?|dial)\s+[a-z0-9]""",
+            RegexOption.IGNORE_CASE,
+        )
+
         private val OPEN_AND_SEARCH_REGEX = Regex(
             """\b(?:open|launch|start)\s+\S+.*\b(?:search|play|find|look\s+up)\b""",
         )
@@ -366,7 +387,8 @@ class PlaceholderIntentClassifier : IntentClassifier {
 
         private val LEGACY_KEYWORDS = listOf(
             listOf("remind", "reminder") to "set_reminder",
-            listOf("call", "text", "message", "sms") to "send_message",
+            listOf("call", "phone", "dial") to "make_phone_call",
+            listOf("text", "message", "sms") to "send_message",
             listOf("search", "find", "look for", "where is") to "search",
             listOf("schedule", "calendar", "meeting", "event") to "manage_calendar",
             listOf("open", "launch", "start") to "open_application",

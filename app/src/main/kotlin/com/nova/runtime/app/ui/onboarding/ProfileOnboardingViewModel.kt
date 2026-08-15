@@ -47,6 +47,10 @@ class ProfileOnboardingViewModel(
         }
     }
 
+    fun openProfileOnboarding() {
+        _showOnboarding.value = true
+    }
+
     fun updateWorkHoursStart(value: String) {
         _uiState.value = _uiState.value.copy(workHoursStart = value)
     }

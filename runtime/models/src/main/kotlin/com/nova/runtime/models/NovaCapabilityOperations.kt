@@ -6,6 +6,7 @@ package com.nova.runtime.models
  */
 object NovaCapabilityOperations {
     const val WHATSAPP_SEND_MESSAGE = "whatsapp.send_message"
+    const val MAKE_PHONE_CALL = "phone.make_call"
     const val SEARCH_PHOTOS = "search.photos"
     const val SEARCH_DOCUMENTS = "search.documents"
     const val ALARM_CREATE = "alarm.create"
@@ -21,6 +22,7 @@ object NovaCapabilityOperations {
 
     val ALL: Set<String> = setOf(
         WHATSAPP_SEND_MESSAGE,
+        MAKE_PHONE_CALL,
         SEARCH_PHOTOS,
         SEARCH_DOCUMENTS,
         ALARM_CREATE,
@@ -38,6 +40,7 @@ object NovaCapabilityOperations {
     fun forIntent(intentType: String): String? = when (intentType) {
         "send_document_whatsapp" -> WHATSAPP_SEND_MESSAGE
         "send_whatsapp_message", "send_message" -> WHATSAPP_SEND_MESSAGE
+        "make_phone_call", "make_call", "phone_call", "dial_number" -> MAKE_PHONE_CALL
         "search_photos" -> SEARCH_PHOTOS
         "search_documents", "document_question", "extract_document_content" -> SEARCH_DOCUMENTS
         "set_alarm", "set_reminder" -> ALARM_CREATE

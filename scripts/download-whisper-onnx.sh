@@ -8,7 +8,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET="${REPO_ROOT}/app/src/main/assets/models/whisper-tiny.onnx"
-MODEL_URL="${WHISPER_ONNX_URL:-https://huggingface.co/onnx-community/whisper-tiny.en/resolve/main/onnx/model.onnx}"
+MODEL_URL="${WHISPER_ONNX_URL:-https://huggingface.co/onnx-community/whisper-tiny.en/resolve/main/onnx/encoder_model.onnx}"
 
 mkdir -p "$(dirname "${TARGET}")"
 

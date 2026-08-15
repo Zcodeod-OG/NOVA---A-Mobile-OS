@@ -82,11 +82,14 @@ class CapabilityFrameworkImpl(
 
         val state = lifecycleManager.getState(metadata.name, metadata.version)
         if (state != CapabilityLifecycleState.ACTIVE) {
+            val notActiveMsg = "Capability ${metadata.name} is not active (${state?.name ?: "unknown"})"
             eventPublisher.publishFailed(
                 traceId = request.traceId,
                 capabilityType = request.capabilityType,
                 errorCode = "CAPABILITY_NOT_ACTIVE",
                 providerId = provider.providerId,
+                userVisibleMessage = notActiveMsg,
+                operation = operation,
             )
             return CapabilityResult.Failure(
                 CapabilityErrors.notActive(metadata.name, state?.name ?: "unknown"),
@@ -106,6 +109,9 @@ class CapabilityFrameworkImpl(
                     capabilityType = request.capabilityType,
                     errorCode = validation.error.code,
                     providerId = provider.providerId,
+                    userVisibleMessage = validation.error.userVisibleMessage,
+                    operation = operation,
+                    diagnostics = validation.error.diagnostics,
                 )
                 return CapabilityResult.Failure(validation.error)
             }
@@ -136,6 +142,9 @@ class CapabilityFrameworkImpl(
                             capabilityType = request.capabilityType,
                             errorCode = response.error.code,
                             providerId = provider.providerId,
+                            userVisibleMessage = response.error.userVisibleMessage,
+                            operation = operation,
+                            diagnostics = response.error.diagnostics,
                         )
                         result = CapabilityResult.Failure(response.error)
                     }
@@ -149,6 +158,8 @@ class CapabilityFrameworkImpl(
                 capabilityType = request.capabilityType,
                 errorCode = "CAPABILITY_EXECUTION_ERROR",
                 providerId = provider.providerId,
+                userVisibleMessage = throwable.message ?: "Capability execution exception",
+                operation = operation,
             )
             logger.error(
                 RuntimeModule.CAPABILITY.name,

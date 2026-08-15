@@ -164,7 +164,7 @@ private fun ActivityCard(
             Text(
                 text = item.timestamp,
                 style = MaterialTheme.typography.labelSmall,
-                color = NovaColors.textSecondary,
+                color = androidx.compose.ui.graphics.Color(0xFFDDDDDD),
             )
         }
 
@@ -174,7 +174,7 @@ private fun ActivityCard(
             color = if (item.isAlert || item.message.startsWith("FAILED", ignoreCase = true)) {
                 NovaColors.error
             } else {
-                NovaColors.textPrimary
+                androidx.compose.ui.graphics.Color.White
             },
             maxLines = if (isExtract || canExpand) Int.MAX_VALUE else 6,
             overflow = TextOverflow.Ellipsis,

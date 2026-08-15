@@ -54,6 +54,7 @@ class AndroidCapabilityProviderTest {
         assertEquals(
             setOf(
                 CapabilityOperations.WHATSAPP_SEND_MESSAGE,
+                CapabilityOperations.MAKE_PHONE_CALL,
                 CapabilityOperations.CONTACTS_SEARCH,
             ),
             communicationProvider.supportedOperations(),

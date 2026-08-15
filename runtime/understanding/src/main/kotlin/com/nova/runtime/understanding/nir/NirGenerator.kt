@@ -163,8 +163,10 @@ class DefaultNirGenerator : NirGenerator {
                 }
                 enrichDocumentQuestionConstraints(payload, constraints)
                 constraints["answerMode"] = "extract"
-                constraints["maxDisplayChars"] = DEFAULT_EXTRACT_DISPLAY_CHARS.toString()
-                constraints["displayMode"] = resolveExtractDisplayMode(payload, constraints)
+                val displayMode = resolveExtractDisplayMode(payload, constraints)
+                constraints["displayMode"] = displayMode
+                val maxChars = if (displayMode == DISPLAY_MODE_VERBATIM) 128_000 else DEFAULT_EXTRACT_DISPLAY_CHARS
+                constraints["maxDisplayChars"] = maxChars.toString()
                 constraints["intentType"] = intentType
             }
         }

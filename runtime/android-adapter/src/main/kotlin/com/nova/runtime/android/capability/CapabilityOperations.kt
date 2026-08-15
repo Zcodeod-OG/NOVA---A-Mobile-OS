@@ -3,6 +3,7 @@ package com.nova.runtime.android.capability
 /** Canonical capability operation identifiers wired to Android adapters. */
 object CapabilityOperations {
     const val WHATSAPP_SEND_MESSAGE = "whatsapp.send_message"
+    const val MAKE_PHONE_CALL = "phone.make_call"
     const val ALARM_CREATE = "alarm.create"
     const val CALENDAR_READ = "calendar.read"
     const val CALENDAR_CREATE = "calendar.create"
