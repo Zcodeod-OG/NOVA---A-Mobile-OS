@@ -119,4 +119,10 @@ interface DocumentDao {
 
     @Query("SELECT COUNT(*) FROM documents WHERE summary IS NULL OR length(summary) = 0")
     suspend fun countMissingSummary(): Int
+
+    @Query("SELECT * FROM documents ORDER BY modifiedAt DESC")
+    fun observeAll(): Flow<List<DocumentEntity>>
+
+    @Query("SELECT COUNT(*) FROM documents")
+    fun observeCount(): Flow<Int>
 }

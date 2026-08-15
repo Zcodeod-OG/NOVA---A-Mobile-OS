@@ -28,3 +28,8 @@ runtime/storage/schemas/
 # Local ONNX export artifacts (use assets or download flow)
 /embedding-mini.onnx
 /minilm-onnx-export/
+
+# Build artifacts & temp files
+*.apk
+tmp/
+

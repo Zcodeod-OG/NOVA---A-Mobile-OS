@@ -93,6 +93,8 @@ class AndroidModelDownloadManager(
             isActive = true,
         )
 
+        val failedFiles = mutableListOf<String>()
+
         for (pending in pendingRemote) {
             if (cancelled.get()) {
                 throw CancellationException("Model downloads cancelled")
@@ -137,14 +139,22 @@ class AndroidModelDownloadManager(
                 updateFileProgress(pending.fileName) {
                     it.copy(phase = ModelFilePhase.FAILED, errorMessage = error)
                 }
-                finishFailed("Failed to download ${pending.fileName}: $error")
-                return
+                if (catalogEntry.isRequired) {
+                    finishFailed("Failed to download ${pending.fileName}: $error")
+                    return
+                } else {
+                    failedFiles.add(pending.fileName)
+                }
+            } else {
+                markFileComplete(pending.fileName)
             }
-
-            markFileComplete(pending.fileName)
         }
 
-        finishSuccess("All NOVA models are ready.")
+        if (failedFiles.isEmpty()) {
+            finishSuccess("All NOVA models are ready.")
+        } else {
+            finishSuccess("NOVA Core models ready (${failedFiles.size} optional model(s) pending).")
+        }
     }
 
     override fun cancel() {
@@ -346,6 +356,5 @@ class AndroidModelDownloadManager(
     private fun isFullyReady(readiness: ModelReadiness): Boolean =
         readiness.embeddingReady &&
             readiness.whisperReady &&
-            readiness.llmLightReady &&
-            readiness.llmFullReady
+            readiness.llmLightReady
 }

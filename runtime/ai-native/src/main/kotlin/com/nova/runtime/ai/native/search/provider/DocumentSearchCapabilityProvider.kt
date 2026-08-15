@@ -33,7 +33,7 @@ class DocumentSearchCapabilityProvider(
         val answerMode = request.parameters["answerMode"] ?: GroundedDocumentAnswerService.ANSWER_MODE_QA
         val displayMode = request.parameters["displayMode"] ?: DocumentDateIntelligence.DISPLAY_MODE_SCOPED
         val maxDisplayChars = request.parameters["maxDisplayChars"]?.toIntOrNull()
-            ?: DocumentDateIntelligence.DEFAULT_EXTRACT_CHARS
+            ?: if (displayMode == DocumentDateIntelligence.DISPLAY_MODE_VERBATIM) 128_000 else DocumentDateIntelligence.DEFAULT_EXTRACT_CHARS
 
         val semanticPage = semanticSearchService.search(
             request = searchRequest,

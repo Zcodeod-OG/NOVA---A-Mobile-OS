@@ -209,7 +209,7 @@ object DocumentDateIntelligence {
         if (content.isBlank()) return null
         val plain = DocumentContentNormalizer.toPlainText(content)
         if (!DocumentContentNormalizer.isGroundedAnswerable(plain)) return null
-        val budget = minOf(maxChars, maxCharsForQuery(query, maxChars))
+        val budget = if (displayMode == DISPLAY_MODE_VERBATIM) maxChars else minOf(maxChars, maxCharsForQuery(query, maxChars))
         if (displayMode == DISPLAY_MODE_VERBATIM) {
             return extractLeadSnippet(plain, budget)
                 ?: normalize(plain.take(budget)).takeIf { it.isNotBlank() }

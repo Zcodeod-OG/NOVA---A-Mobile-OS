@@ -32,4 +32,10 @@ interface EmbeddingDao {
 
     @Query("SELECT * FROM embeddings WHERE vectorBlob IS NOT NULL")
     suspend fun listWithPersistedVectors(): List<EmbeddingEntity>
+
+    @Query("SELECT COUNT(*) FROM embeddings")
+    fun observeCount(): Flow<Int>
+
+    @Query("SELECT * FROM embeddings")
+    fun observeAll(): Flow<List<EmbeddingEntity>>
 }

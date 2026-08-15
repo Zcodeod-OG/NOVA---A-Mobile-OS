@@ -23,6 +23,8 @@ object CapabilityOperationAliases {
         when (qualified) {
             NovaCapabilityOperations.WHATSAPP_SEND_MESSAGE ->
                 androidKeys += LookupKey("communication", NovaCapabilityOperations.WHATSAPP_SEND_MESSAGE)
+            NovaCapabilityOperations.MAKE_PHONE_CALL ->
+                androidKeys += LookupKey("communication", NovaCapabilityOperations.MAKE_PHONE_CALL)
             NovaCapabilityOperations.CONTACTS_SEARCH ->
                 androidKeys += LookupKey("communication", NovaCapabilityOperations.CONTACTS_SEARCH)
             NovaCapabilityOperations.ALARM_CREATE ->

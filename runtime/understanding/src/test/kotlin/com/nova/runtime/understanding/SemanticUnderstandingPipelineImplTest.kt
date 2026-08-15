@@ -90,7 +90,7 @@ class SemanticUnderstandingPipelineImplTest {
         val nir = pipeline.process(observation)
 
         assertNotNull(nir)
-        assertEquals("send_message", nir.goal)
+        assertEquals("make_phone_call", nir.goal)
         assertEquals("voice", nir.constraints["modality"])
     }
 

@@ -38,6 +38,7 @@ class AndroidCommunicationProvider(
     override fun supportedOperations(): Set<String> =
         setOf(
             CapabilityOperations.WHATSAPP_SEND_MESSAGE,
+            CapabilityOperations.MAKE_PHONE_CALL,
             CapabilityOperations.CONTACTS_SEARCH,
         )
 
@@ -46,7 +47,7 @@ class AndroidCommunicationProvider(
 
     override fun permissionsForOperation(operation: String): Set<String> =
         when (operation) {
-            CapabilityOperations.CONTACTS_SEARCH ->
+            CapabilityOperations.CONTACTS_SEARCH, CapabilityOperations.MAKE_PHONE_CALL ->
                 setOf(android.Manifest.permission.READ_CONTACTS)
             // Phone-number-only WhatsApp sends do not need contacts; name lookup is checked in validate.
             else -> emptySet()
@@ -55,7 +56,13 @@ class AndroidCommunicationProvider(
     override suspend fun validateOperation(
         request: CapabilityExecutionRequest,
     ): CapabilityValidationResult {
-        if (request.operation == CapabilityOperations.WHATSAPP_SEND_MESSAGE) {
+        if (request.operation == CapabilityOperations.MAKE_PHONE_CALL) {
+            val recipient = request.parameters["recipient"] ?: request.parameters["name"]
+            val phoneNumber = request.parameters["phoneNumber"] ?: request.parameters["number"]
+            if (recipient.isNullOrBlank() && phoneNumber.isNullOrBlank()) {
+                return invalidParameters("recipient or phoneNumber is required to make a call")
+            }
+        } else if (request.operation == CapabilityOperations.WHATSAPP_SEND_MESSAGE) {
             val message = request.parameters["message"] ?: request.parameters["text"]
             val phoneNumber = request.parameters["phoneNumber"]
             val uri = request.parameters["uri"]
@@ -94,9 +101,64 @@ class AndroidCommunicationProvider(
     ): CapabilityResult =
         when (operation) {
             CapabilityOperations.WHATSAPP_SEND_MESSAGE -> sendWhatsAppMessage(parameters, traceId)
+            CapabilityOperations.MAKE_PHONE_CALL -> makePhoneCall(parameters, traceId)
             CapabilityOperations.CONTACTS_SEARCH -> searchContacts(parameters, traceId)
             else -> error("unsupported operation: $operation")
         }
+
+    private suspend fun makePhoneCall(
+        parameters: Map<String, String>,
+        traceId: UUID,
+    ): CapabilityResult {
+        val recipient = parameters["recipient"] ?: parameters["name"] ?: parameters["query"]
+        var phoneNumber = parameters["phoneNumber"] ?: parameters["number"]
+
+        if (phoneNumber.isNullOrBlank() && !recipient.isNullOrBlank()) {
+            phoneNumber = resolvePhoneNumberForContact(recipient, traceId)
+        }
+
+        if (phoneNumber.isNullOrBlank()) {
+            val missingContactHint = if (!recipient.isNullOrBlank()) {
+                "Could not find phone number for '$recipient' in your contacts"
+            } else {
+                "Phone number or contact name is required to make a call"
+            }
+            return CapabilityResult.Failure(
+                RuntimeError(
+                    code = "PHONE_NUMBER_NOT_FOUND",
+                    category = ErrorCategory.EXECUTION,
+                    severity = ErrorSeverity.MEDIUM,
+                    recoverable = true,
+                    userVisibleMessage = missingContactHint,
+                    diagnostics = buildMap {
+                        put("providerId", providerId)
+                        put("operation", CapabilityOperations.MAKE_PHONE_CALL)
+                        recipient?.let { put("recipient", it) }
+                    },
+                ),
+            )
+        }
+
+        val dialResult = adapters.intents.execute(
+            operation = IntentOperations.DIAL,
+            parameters = mapOf("phoneNumber" to phoneNumber),
+            traceId = traceId,
+        )
+
+        return when (dialResult) {
+            is CapabilityResult.Success -> {
+                val label = recipient?.takeIf { it.isNotBlank() } ?: phoneNumber
+                CapabilityResult.Success(
+                    dialResult.output + mapOf(
+                        "userMessage" to "Dialing $label ($phoneNumber)…",
+                        "status" to "dialed",
+                        "phoneNumber" to phoneNumber,
+                    ),
+                )
+            }
+            is CapabilityResult.Failure -> dialResult
+        }
+    }
 
     private suspend fun sendWhatsAppMessage(
         parameters: Map<String, String>,

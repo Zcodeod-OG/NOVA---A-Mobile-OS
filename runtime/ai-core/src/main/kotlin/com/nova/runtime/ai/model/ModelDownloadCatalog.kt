@@ -13,6 +13,7 @@ object ModelDownloadCatalog {
         val minimumValidBytes: Long,
         val copyFromAssets: Boolean,
         val tier: ModelReadinessTier,
+        val isRequired: Boolean = true,
     )
 
     val ENTRIES: List<Entry> = listOf(
@@ -23,6 +24,7 @@ object ModelDownloadCatalog {
             minimumValidBytes = 1_000_000L,
             copyFromAssets = true,
             tier = ModelReadinessTier.CORE,
+            isRequired = true,
         ),
         Entry(
             fileName = ModelAssetPaths.WHISPER_MODEL,
@@ -31,14 +33,7 @@ object ModelDownloadCatalog {
             minimumValidBytes = 10_000_000L,
             copyFromAssets = false,
             tier = ModelReadinessTier.VOICE,
-        ),
-        Entry(
-            fileName = ModelAssetPaths.GEMMA_TASK_MODEL,
-            downloadUrl = GEMMA_TASK_URL,
-            expectedSizeBytes = 550_000_000L,
-            minimumValidBytes = ModelAssetPaths.GEMMA_TASK_MIN_BYTES,
-            copyFromAssets = false,
-            tier = ModelReadinessTier.INFERENCE_LIGHT,
+            isRequired = true,
         ),
         Entry(
             fileName = ModelAssetPaths.LLM_LIGHT_MODEL,
@@ -47,6 +42,7 @@ object ModelDownloadCatalog {
             minimumValidBytes = 100_000_000L,
             copyFromAssets = false,
             tier = ModelReadinessTier.INFERENCE_LIGHT,
+            isRequired = true,
         ),
         Entry(
             fileName = ModelAssetPaths.LLM_FULL_MODEL,
@@ -55,6 +51,16 @@ object ModelDownloadCatalog {
             minimumValidBytes = 500_000_000L,
             copyFromAssets = false,
             tier = ModelReadinessTier.INFERENCE_FULL,
+            isRequired = false,
+        ),
+        Entry(
+            fileName = ModelAssetPaths.GEMMA_TASK_MODEL,
+            downloadUrl = GEMMA_TASK_URL,
+            expectedSizeBytes = 550_000_000L,
+            minimumValidBytes = ModelAssetPaths.GEMMA_TASK_MIN_BYTES,
+            copyFromAssets = false,
+            tier = ModelReadinessTier.INFERENCE_LIGHT,
+            isRequired = false,
         ),
     )
 
@@ -71,7 +77,7 @@ object ModelDownloadCatalog {
         "https://huggingface.co/onnx-community/Qwen2.5-1.5B-Instruct/resolve/main/onnx/model_q4.onnx"
 
     private const val WHISPER_URL =
-        "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/main/onnx/model.onnx"
+        "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/main/onnx/encoder_model.onnx"
 
     /** MediaPipe-compatible Gemma 3 1B IT (int4 .task) for grounded document answers. */
     private const val GEMMA_TASK_URL =

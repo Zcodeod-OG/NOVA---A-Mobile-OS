@@ -28,6 +28,8 @@ class PlaceholderIntentClassifierTest {
     companion object {
         @JvmStatic
         fun featureCommands(): Stream<Arguments> = Stream.of(
+            Arguments.of("call John", "make_phone_call"),
+            Arguments.of("phone call Atharv", "make_phone_call"),
             Arguments.of("send whatsapp message to John saying hello", "send_whatsapp_message"),
             Arguments.of("search photos from last week", "search_photos"),
             Arguments.of("find document about budget", "search_documents"),
