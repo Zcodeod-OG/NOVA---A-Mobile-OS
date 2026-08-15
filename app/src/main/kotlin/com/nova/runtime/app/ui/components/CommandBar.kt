@@ -1,5 +1,11 @@
 package com.nova.runtime.app.ui.components
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -45,6 +51,7 @@ fun CommandBar(
     isRecording: Boolean = false,
     voiceStatusMessage: String? = null,
 ) {
+    val context = LocalContext.current
     var queryText by remember { mutableStateOf("") }
 
     fun submit() {

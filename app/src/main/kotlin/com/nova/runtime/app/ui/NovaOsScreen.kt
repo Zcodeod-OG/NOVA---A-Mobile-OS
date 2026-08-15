@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.nova.runtime.app.ui.components.ActivityStream
+import com.nova.runtime.app.ui.components.AppGridSection
 import com.nova.runtime.app.ui.components.CommandBar
 import com.nova.runtime.app.ui.components.ContentDetailSheet
 import com.nova.runtime.app.ui.components.ModelDownloadOverlay
